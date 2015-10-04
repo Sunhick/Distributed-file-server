@@ -6,9 +6,9 @@
 # ############################################
 
 CC = g++
-DEBUG = -g -O0
+DBUG = -g -O0
 LDFLAGS = -pthread
-CCFLAGS = -Wall -std=c++11 $(DEBUG) -I $(IDIR)
+CCFLAGS = -Wall -std=c++11 $(DBUG) -I $(IDIR)
 
 IDIR = ./include
 Exe = dfs
@@ -19,6 +19,9 @@ OBJS = $(SRC:.cc=.o)
 
 TARBALL = dfs.tar.gz
 
+ifeq ($(DEBUG), 1)
+	DBUG += -DDEBUG
+endif
 
 all: $(Exe)
 
