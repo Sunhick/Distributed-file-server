@@ -59,7 +59,8 @@ dfconfig::dfconfig(std::string fpath)
 
 dfconfig::~dfconfig() 
 {
-  
+  this->chunk_servers.clear();
+  this->authentications.clear();
 }
 
 std::vector<std::string> dfconfig::split(const std::string& str, int delimiter(int))
