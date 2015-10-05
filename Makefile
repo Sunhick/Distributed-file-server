@@ -15,13 +15,16 @@ DFS = dfs
 DFC = dfc
 TEST = test
 
-DFS_SRC = dfcomm.cc dfconfig.cc dfchunksrv.cc dfmaster.cc
+# Source files for dfs
+DFS_SRC = dfcomm.cc dfconfig.cc dfchunksrv.cc dfmaster.cc testchunk.cc
 DFS_OBJS = $(DFS_SRC:.cc=.o)
 
-DFC_SRC = dfclient.cc dfcomm.cc dfconfig.cc
+# Source files for dfc
+DFC_SRC = dfcomm.cc dfconfig.cc dfclient.cc
 DFC_OBJS = $(DFC_SRC:.cc=.o)
 
-TEST_SRC = testserver.cc 
+# Source files for Test
+TEST_SRC = dfchunksrv.cc testchunk.cc 
 TEST_OBJS = $(TEST_SRC:.cc=.o)
 
 OBJS = $(DFC_OBJS) $(DFS_OBJS) $(TEST_OBJS)
@@ -38,13 +41,13 @@ endif
 all: $(DFS) $(DFC) $(TEST)
 
 $(TEST): $(TEST_OBJS)
-	$(CC) $(LDFLAGS) $< -o $@
+	$(CC) $(LDFLAGS) $(TEST_OBJS) -o $@
 
 $(DFC): $(DFC_OBJS)
-	$(CC) $(LDFLAGS) $< -o $@
+	$(CC) $(LDFLAGS) $(DFC_OBJS) -o $@
 
 $(DFS): $(DFS_OBJS)
-	$(CC) $(LDFLAGS) $< -o $@
+	$(CC) $(LDFLAGS) $(DFS_OBJS) -o $@
 
 %.o: %.cc
 	$(CC) -c -o $@ $(CCFLAGS) $<

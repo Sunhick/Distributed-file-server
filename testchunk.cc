@@ -12,9 +12,14 @@ using namespace dfs;
 
 int main(int argc, char *argv[])
 {
+  if (argc < 2) {
+    std::cout << "Error in invoking...!" << std::endl;
+    return 1;
+  }
+  
   try {
-    df_chunk_srv srv("DFS2", 10001);
-    srv.list();
+    df_chunk_srv srv(argv[1], atoi(argv[2]));
+    srv.listen_forever();
   } catch (...) {
     cout << "ERROR " << endl;
   }
