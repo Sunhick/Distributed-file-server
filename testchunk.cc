@@ -12,8 +12,8 @@ using namespace dfs;
 
 int main(int argc, char *argv[])
 {
-  if (argc < 2) {
-    std::cout << "Error in invoking...!" << std::endl;
+  if (argc < 3) {
+    std::cout << "Invalid parameters. pass file system and port!" << std::endl;
     return 1;
   }
   

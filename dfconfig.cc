@@ -92,3 +92,8 @@ dfs_address dfconfig::get_chunk_server(std::string name)
     this->chunk_servers[name] : dfs_address();
     // throw "specified distributed server is not running!";
 }
+
+std::map<std::string, dfs_address> dfconfig::get_all_servers()
+{
+  return this->chunk_servers;
+}

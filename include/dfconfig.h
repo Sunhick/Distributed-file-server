@@ -19,8 +19,7 @@ namespace dfs {
   };
 
   // df configuration parser
-  class dfconfig
-  {
+  class dfconfig {
   private:
     // map of <dfs_name, dfs_address>
     std::map<std::string, dfs_address> chunk_servers;
@@ -33,6 +32,7 @@ namespace dfs {
     dfconfig(std::string fpath);
     ~dfconfig();
 
+    std::map<std::string, dfs_address> get_all_servers();
     dfs_address get_chunk_server(std::string name);
     bool validate(std::string name, std::string password);
   };
