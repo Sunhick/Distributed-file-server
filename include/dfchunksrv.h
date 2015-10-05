@@ -11,6 +11,8 @@
 #include <thread>
 #include <mutex>
 
+#include "dfcomm.h"
+
 namespace dfs {
   class df_chunk_srv {
   private:
@@ -19,6 +21,7 @@ namespace dfs {
     std::string filesys = "/DFS#";
     int port = -1;
     int sockfd;
+    generic_comm* communication;
 
     // lock for maintaining the consistancy on pending requests
     std::mutex request_lock;
@@ -27,14 +30,12 @@ namespace dfs {
 
     // handle the df client server request
     void dispatch_request(int newfd);
-    int die(const char *format, ...);
 
   public:
     df_chunk_srv(std::string filesys, int port);
     ~df_chunk_srv();
     
     void start();
-    int open_socket(int backlog);
     void listen_forever();
     // list all available files under the server
     void list();

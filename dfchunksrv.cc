@@ -40,6 +40,8 @@ df_chunk_srv::df_chunk_srv(std::string filesys, int port)
   if (filesys.empty())
     throw std::string("File system is not mentioned");  
 
+  this->communication = new df_socket_comm("localhost", port);
+  
   this->port = port;
   this->filesys = filesys;
   struct stat st = {0};
@@ -54,59 +56,12 @@ df_chunk_srv::~df_chunk_srv()
   
 }
 
-int df_chunk_srv::open_socket(int backlog)
-{
-  struct sockaddr_in sin; 	// an Internet endpoint address 
-  int sockfd;               	// socket descriptor 
-
-  memset(&sin, 0, sizeof(sin));
-  sin.sin_family = AF_INET;
-
-#ifdef USE_IP
-  // support for connecting from different host
-  sin.sin_addr.s_addr = inet_addr("10.201.29.217");
-#else
-  // use local host
-  sin.sin_addr.s_addr = INADDR_ANY;
-#endif
-
-  // Map port number (char string) to port number (int)
-  if ((sin.sin_port=htons((unsigned short)this->port)) == 0)
-    die("can't get \"%sockfd\" port number\n", this->port);
-
-  // Allocate a socket
-  sockfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (sockfd < 0)
-    die("can't create socket: %sockfd\n", strerror(errno));
-
-  // Bind the socket
-  if (bind(sockfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
-    fprintf(stderr, "can't bind to %d port: %s; Trying other port\n",
-	    this->port, strerror(errno));
-    sin.sin_port=htons(0); /* request a port number to be allocated
-			      by bind */
-    if (bind(sockfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
-      die("can't bind: %sockfd\n", strerror(errno));
-    } else {
-      int socklen = sizeof(sin);
-      if (getsockname(sockfd, (struct sockaddr *)&sin, (socklen_t *)&socklen) < 0)
-	die("getsockname: %sockfd\n", strerror(errno));
-      printf("New server port number is %d\n", ntohs(sin.sin_port));
-    }
-  }
-
-  if (listen(sockfd, backlog) < 0)
-    die("can't listen on %sockfd port: %sockfd\n", this->port, strerror(errno));
-
-  return sockfd;
-}
-
 void df_chunk_srv::start()
 {
   try {
     // open master socket for client to connect
     // a maximum of 32 client can connect simultaneously.
-    g_sock = sockfd = open_socket(BACKLOG);
+    g_sock = sockfd = this->communication->open(BACKLOG); // open_socket(BACKLOG);
 
     // unable to open socket.
     if (sockfd < 0)
@@ -122,10 +77,8 @@ void df_chunk_srv::start()
     // Accept incoming connections & launch
     // the request thread to service the clients
     while (true) {
-      struct sockaddr_in their_addr;
-      socklen_t sin_size = sizeof(struct sockaddr_in);
-      int newfd;
-      if ((newfd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size)) == -1) {
+      int newfd = communication->accept(sockfd);
+      if (newfd == -1) {
 	perror("accept");
 	continue;
       }
@@ -166,7 +119,7 @@ void df_chunk_srv::dispatch_request(int newfd)
 
   while (true) {
     char buff[4096];      
-    if (read(newfd, buff, 4096) == 0) {
+    if (communication->read(newfd, buff, 4096) == 0) {
       std::cout << "Unable to read the socket!" << std::endl;
       break;
     }
@@ -211,13 +164,4 @@ void df_chunk_srv::get(std::string filename)
 void df_chunk_srv::put(std::string filename, std::string content)
 {
 
-}
-
-int df_chunk_srv::die(const char *format, ...)
-{
-  va_list args;
-  va_start(args, format);
-  vfprintf(stderr, format, args);
-  va_end(args);
-  exit(EXIT_FAILURE);  
 }

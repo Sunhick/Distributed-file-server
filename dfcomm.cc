@@ -31,6 +31,7 @@ df_socket_comm::df_socket_comm(std::string host, int port) : generic_comm()
 
 df_socket_comm::~df_socket_comm()
 {
+
 }
 
 int df_socket_comm::die(const char *format, ...)
@@ -92,8 +93,8 @@ int df_socket_comm::open(int backlog)
 int df_socket_comm::connect()
 {
   struct hostent  *host_entry;   // pointer to host information entry
-  struct sockaddr_in sin; // an Internet endpoint address
-  int     sockd;              // socket descriptor
+  struct sockaddr_in sin;        // an Internet endpoint address
+  int     sockd;                 // socket descriptor
 
 
   memset(&sin, 0, sizeof(sin));
@@ -124,12 +125,19 @@ int df_socket_comm::connect()
   return sockd;
 }
 
-void df_socket_comm::read()
+ssize_t df_socket_comm::read(int fd, void* buf, size_t count)
 {
-
+  return ::read(fd, buf, count);
 }
 
-void df_socket_comm::write()
+ssize_t df_socket_comm::write(int fd, const void *buf, size_t count)
 {
+  return ::write(fd, buf, count);
+}
 
+int df_socket_comm::accept(int sockfd)
+{
+  struct sockaddr_in their_addr;
+  socklen_t sin_size = sizeof(struct sockaddr_in);
+  return ::accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
 }

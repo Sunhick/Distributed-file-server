@@ -24,7 +24,7 @@ DFC_SRC = dfcomm.cc dfconfig.cc dfclient.cc
 DFC_OBJS = $(DFC_SRC:.cc=.o)
 
 # Source files for Test
-TEST_SRC = dfchunksrv.cc testchunk.cc 
+TEST_SRC = dfcomm.cc dfchunksrv.cc testchunk.cc 
 TEST_OBJS = $(TEST_SRC:.cc=.o)
 
 OBJS = $(DFC_OBJS) $(DFS_OBJS) $(TEST_OBJS)
@@ -56,6 +56,6 @@ $(DFS): $(DFS_OBJS)
 clean:
 	@rm $(OBJS) $(DFS) $(DFC) $(TEST) *~ include/*~ $(TARBALL)
 
-# create a web server source tar ball 
+# create a source tar ball 
 tar:
 	tar -cvzf $(TARBALL) *.* include/*.* README Makefile

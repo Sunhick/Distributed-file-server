@@ -17,10 +17,11 @@ namespace dfs {
   class generic_comm {
   public:
     virtual int open(int backlog) = 0;
-    virtual void write() = 0;
+    virtual int accept(int sockfd) = 0;
     virtual int connect() = 0;
-    virtual void read() = 0;
-
+    virtual ssize_t read(int fd, void *buf, size_t count) = 0;
+    virtual ssize_t write(int fd, const void *buf, size_t count) = 0;
+    
     generic_comm() { } 
     virtual ~generic_comm() { }
   };
@@ -39,9 +40,11 @@ namespace dfs {
     ~df_socket_comm();
     
     virtual int open(int backlog);
-    virtual void write();
+    virtual int accept(int sockfd);
     virtual int connect();
-    virtual void read();    
+
+    virtual ssize_t write(int fd, const void *buf, size_t count);
+    virtual ssize_t read(int fd, void *buf, size_t count);
   };
 }
 
