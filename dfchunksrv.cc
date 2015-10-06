@@ -5,24 +5,17 @@
  *****************************************************/
 #include "include/dfchunksrv.h"
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
-#include <sys/errno.h>
 #include <sys/stat.h>
 
-#include <netinet/in.h>
-#include <arpa/inet.h>
-
-#include <netdb.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 
+#include <dirent.h>
+
+#include <sstream>
 #include <exception>
 #include <csignal>
 #include <thread>
@@ -61,7 +54,7 @@ void df_chunk_srv::start()
   try {
     // open master socket for client to connect
     // a maximum of 32 client can connect simultaneously.
-    g_sock = sockfd = this->communication->open(BACKLOG); // open_socket(BACKLOG);
+    g_sock = sockfd = this->communication->open(BACKLOG);
 
     // unable to open socket.
     if (sockfd < 0)
@@ -115,10 +108,10 @@ void df_chunk_srv::start()
 void df_chunk_srv::dispatch_request(int newfd)
 {
   std::cout << "Worker thread(client):"  << std::this_thread::get_id()
-	    <<  " socket Id: " << newfd << std::endl;
-
+	    <<  " socket Id: " << newfd << std::endl;  
+  
   while (true) {
-    char buff[4096];      
+    char buff[4096] = {'\0'};
     if (communication->read(newfd, buff, 4096) == 0) {
       std::cout << "Unable to read the socket!" << std::endl;
       break;
@@ -127,8 +120,9 @@ void df_chunk_srv::dispatch_request(int newfd)
     // process the buffer if it contains request
     if (buff == NULL || strlen(buff) == 0) break;
 
-    std::string reqlines = std::string(buff);
-    std::cout << "Request:" << reqlines << std::endl;
+    std::string request = std::string(buff);
+    std::cout << "raw request:" << request << std::endl;
+    handle(request, newfd);
   }
 
   // close the socket
@@ -145,15 +139,49 @@ void df_chunk_srv::dispatch_request(int newfd)
   }
 }
 
+void df_chunk_srv::handle(std::string request, int newfd) {
+  std::stringstream parse(request);
+  std::string str;
+
+  parse >> str;
+
+  std::cout << "request : " << str << std::endl;
+  
+  if (str == "LIST") {
+    std::cout << "In list " << std::endl;
+    list(newfd);
+  } else if (str == "GET") {
+    std::string filename;
+    get(filename);
+  } else if (str == "PUT") {
+    std::string filename, content;
+    put(filename, content);
+  } else {
+    std::cout << "Invalid request from df client!" << std::endl;
+  }
+}
 
 void df_chunk_srv::listen_forever()
 {
   this->start();
 }
 
-void df_chunk_srv::list()
+void df_chunk_srv::list(int newfd)
 {
-  
+  std::vector<std::string> files;
+  this->get_all_files(files, this->filesys);
+  std::cout << "Get all files size: " << files.size() << std::endl;
+
+  if (files.size()) {
+    std::string data;
+    for (auto file : files) {
+      data += file + " ";
+      std::cout << data << std::endl;
+    }
+    data += '\0';  // null terminated string
+    std::cout << "List of files:" << data << std::endl;
+    this->communication->write(newfd, data.c_str(), data.size());
+  }
 }
 
 void df_chunk_srv::get(std::string filename)
@@ -165,3 +193,31 @@ void df_chunk_srv::put(std::string filename, std::string content)
 {
 
 }
+
+
+void df_chunk_srv::get_all_files(std::vector<std::string> &out, const std::string &directory)
+{
+  DIR *dir;
+  class dirent *ent;
+  class stat st;
+
+  dir = opendir(directory.c_str());
+  while ((ent = readdir(dir)) != NULL) {
+    const std::string file_name = ent->d_name;
+    const std::string full_file_name = directory + "/" + file_name;
+
+    if (file_name[0] == '.')
+      continue;
+
+    if (stat(full_file_name.c_str(), &st) == -1)
+      continue;
+
+    const bool is_directory = (st.st_mode & S_IFDIR) != 0;
+
+    if (is_directory)
+      continue;
+
+    out.push_back(file_name);
+  }
+  closedir(dir);
+} 

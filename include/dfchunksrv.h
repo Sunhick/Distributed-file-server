@@ -10,6 +10,7 @@
 #include <map>
 #include <thread>
 #include <mutex>
+#include <vector>
 
 #include "dfcomm.h"
 
@@ -31,6 +32,10 @@ namespace dfs {
     // handle the df client server request
     void dispatch_request(int newfd);
 
+    // get the list of all files given the directory
+    void get_all_files(std::vector<std::string> &out, const std::string &directory);
+    void handle(std::string request, int sockfd);
+
   public:
     df_chunk_srv(std::string filesys, int port);
     ~df_chunk_srv();
@@ -38,7 +43,7 @@ namespace dfs {
     void start();
     void listen_forever();
     // list all available files under the server
-    void list();
+    void list(int newfd);
     // get the piece information from the server
     void get(std::string filename);
     // store the chunk file in server

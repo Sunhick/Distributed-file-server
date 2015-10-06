@@ -13,6 +13,8 @@
 #include <iostream>
 #include <string.h>
 
+#include "include/dfutilities.h"
+
 using namespace dfs;
 
 df_client::df_client(std::string& file)
@@ -34,7 +36,26 @@ df_client::~df_client()
 
 void df_client::list()
 {
-  
+  system("clear");
+  std::string command("LIST");
+  int ii = 0;
+  char buff[2048] = {'\0'};
+
+  std::cout << "listing contents" << std::endl;
+  for (auto& server : this->channels) {
+    server.second->write(this->sockfds[ii], command.c_str(), command.size());
+    if (server.second->read(this->sockfds[ii++], buff, 2048) == 0) {
+      std::cout << "unable to read the data" << std::endl;
+      continue;
+    }
+
+    std::string data(buff);
+
+    // split based on delimiter
+    auto files = utilities::split(data, [](int ch){ return (ch == ' '? 1 : 0); });
+    for (auto file : files)
+      std::cout << file << " [complete]" <<"\n";
+  }
 }
 
 void df_client::get() 

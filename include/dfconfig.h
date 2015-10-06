@@ -26,8 +26,6 @@ namespace dfs {
     // map of users and their passwords for validation
     std::map<std::string, std::string> authentications;
     
-    std::vector<std::string> split(const std::string& str, int delimiter(int));
-    
   public:
     dfconfig(std::string fpath);
     ~dfconfig();

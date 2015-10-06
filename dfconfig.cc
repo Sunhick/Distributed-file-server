@@ -8,7 +8,8 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
-#include <algorithm>
+
+#include "include/dfutilities.h"
 
 using namespace dfs;
 
@@ -23,14 +24,14 @@ dfconfig::dfconfig(std::string fpath)
       continue;
 
     // split based on space delimiter
-    auto tokens = split(str, std::isspace);
+    auto tokens = utilities::split(str, std::isspace);
     auto identifier = tokens[0];
     std::transform(identifier.begin(), identifier.end(), identifier.begin(), ::tolower);
     if (identifier != "server" &&
 	(identifier == "username:" || identifier == "password")) {
       // collect user name and password
       getline(cfile, str);
-      auto password = split(str, std::isspace).at(1);
+      auto password = utilities::split(str, std::isspace).at(1);
       auto credentials = std::pair<std::string, std::string>(tokens[1], password);
       this->authentications.insert(credentials);
       continue;
@@ -38,7 +39,7 @@ dfconfig::dfconfig(std::string fpath)
 
     std::string dfs = tokens.at(2);
     // split based on colon delimiter to get ip address and port
-    auto address = split(dfs, [](int ch){ return (ch == ':'? 1 : 0); });
+    auto address = utilities::split(dfs, [](int ch){ return (ch == ':'? 1 : 0); });
     struct dfs_address addr = {address[0], atoi(address[1].c_str())};
 
     this->chunk_servers.insert(std::pair<std::string, dfs_address>(tokens[1], addr));
@@ -61,22 +62,6 @@ dfconfig::~dfconfig()
 {
   this->chunk_servers.clear();
   this->authentications.clear();
-}
-
-std::vector<std::string> dfconfig::split(const std::string& str, int delimiter(int))
-{
-  std::vector<std::string> result;
-  auto end = str.end();
-  auto start = str.begin();
-  while (start != end) {
-    start = find_if_not(start, end, delimiter);
-    if (start == end) break;
-    auto index = find_if(start, end, delimiter);
-    result.push_back(std::string(start,index));
-    start = index;
-  }
-
-  return result;
 }
 
 bool dfconfig::validate(std::string name, std::string password) 

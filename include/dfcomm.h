@@ -14,6 +14,7 @@
 #include <string>
 
 namespace dfs {
+
   // Abstract the communication between two same/different hosts
   // generic communication interface
   class generic_comm {

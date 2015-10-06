@@ -16,11 +16,11 @@ DFC = dfc
 TEST = test
 
 # Source files for dfs
-DFS_SRC = dfcomm.cc dfconfig.cc dfchunksrv.cc dfmaster.cc testchunk.cc
+DFS_SRC = dfcomm.cc dfutilities.cc dfconfig.cc dfchunksrv.cc dfmaster.cc testchunk.cc
 DFS_OBJS = $(DFS_SRC:.cc=.o)
 
 # Source files for dfc
-DFC_SRC = dfcomm.cc dfconfig.cc dfclient.cc
+DFC_SRC = dfcomm.cc dfutilities.cc dfconfig.cc dfclient.cc
 DFC_OBJS = $(DFC_SRC:.cc=.o)
 
 # Source files for Test
