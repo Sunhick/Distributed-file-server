@@ -46,7 +46,7 @@ df_chunk_srv::df_chunk_srv(std::string filesys, int port)
 
 df_chunk_srv::~df_chunk_srv() 
 {
-  
+  delete this->communication;
 }
 
 void df_chunk_srv::start()
@@ -172,16 +172,16 @@ void df_chunk_srv::list(int newfd)
   this->get_all_files(files, this->filesys);
   std::cout << "Get all files size: " << files.size() << std::endl;
 
+  std::string data;
   if (files.size()) {
-    std::string data;
     for (auto file : files) {
       data += file + " ";
       std::cout << data << std::endl;
     }
-    data += '\0';  // null terminated string
+    // data += '\0';  // null terminated string
     std::cout << "List of files:" << data << std::endl;
-    this->communication->write(newfd, data.c_str(), data.size());
   }
+  this->communication->write(newfd, data.c_str(), data.size());
 }
 
 void df_chunk_srv::get(std::string filename)

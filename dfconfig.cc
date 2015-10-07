@@ -82,3 +82,17 @@ std::map<std::string, dfs_address> dfconfig::get_all_servers()
 {
   return this->chunk_servers;
 }
+
+void dfconfig::get_username_password(std::string& name,
+				     std::string& password,
+				     unsigned int index)
+{
+  // index out of bounds
+  if (index < 0 || index > this->authentications.size())
+    return;
+  for (auto &pair : authentications) {
+    name = pair.first;
+    password = pair.second;
+    break;
+  }
+}

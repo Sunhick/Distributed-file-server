@@ -11,6 +11,7 @@
 
 #include "dfcomm.h"
 #include "dfconfig.h"
+#include "dfproto.h"
 
 namespace dfs {
   // df client
@@ -20,6 +21,9 @@ namespace dfs {
     std::map<std::string, generic_comm*> channels;
     dfconfig* config;
     std::vector<int> sockfds;
+    // df request protocol. re-use the packet
+    // declare once and use multiple times by changing the command
+    df_request_proto* request;
 
     // list all files available under all servers
     void list();

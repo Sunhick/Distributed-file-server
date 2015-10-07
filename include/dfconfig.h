@@ -33,6 +33,11 @@ namespace dfs {
     std::map<std::string, dfs_address> get_all_servers();
     dfs_address get_chunk_server(std::string name);
     bool validate(std::string name, std::string password);
+    // index represents the entry index which will specify which
+    // user credentials to use.
+    void get_username_password(std::string& name,
+			       std::string& password,
+			       unsigned int index = 0);
   };
 
 }
