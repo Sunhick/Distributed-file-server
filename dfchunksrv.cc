@@ -21,6 +21,9 @@
 #include <thread>
 #include <iostream>
 
+#include "include/dfproto.h"
+#include "include/dfutils.h"
+
 #define PERMISSIONS 0777
 #define BACKLOG 32
 
@@ -34,6 +37,7 @@ df_chunk_srv::df_chunk_srv(std::string filesys, int port)
     throw std::string("File system is not mentioned");  
 
   this->communication = new df_socket_comm("localhost", port);
+  this->config = new dfconfig("dfs.conf");
   
   this->port = port;
   this->filesys = filesys;
@@ -121,7 +125,7 @@ void df_chunk_srv::dispatch_request(int newfd)
     if (buff == NULL || strlen(buff) == 0) break;
 
     std::string request = std::string(buff);
-    std::cout << "raw request:" << request << std::endl;
+    std::cout << "raw-request:" << request << std::endl;
     handle(request, newfd);
   }
 
@@ -139,25 +143,32 @@ void df_chunk_srv::dispatch_request(int newfd)
   }
 }
 
-void df_chunk_srv::handle(std::string request, int newfd) {
-  std::stringstream parse(request);
-  std::string str;
+void df_chunk_srv::handle(std::string request, int newfd) 
+{
+  auto arr = utilities::split(request, [](int c) { return (c=='|' ? 1 : 0); });
+  std::string cmd = arr[2];
 
-  parse >> str;
+  std::string username(arr[0]);
+  std::string password(arr[1]);
 
-  std::cout << "request : " << str << std::endl;
-  
-  if (str == "LIST") {
-    std::cout << "In list " << std::endl;
+  if (!this->config->validate(username, password)) {
+    std::string error("Invalid username/ password. Please try again");
+    df_reply_proto reply(ERR_INVALID_USER, error, " ");
+    std::string rstr = reply.to_string();
+    this->communication->write(newfd, rstr.c_str(), rstr.size());
+    return;
+  }
+
+  if (cmd == "LIST") {
     list(newfd);
-  } else if (str == "GET") {
+  } else if (cmd == "GET") {
     std::string filename;
     get(filename);
-  } else if (str == "PUT") {
+  } else if (cmd == "PUT") {
     std::string filename, content;
     put(filename, content);
   } else {
-    std::cout << "Invalid request from df client!" << std::endl;
+    std::cout << "Invalid request from df client! Cmd:" << cmd << std::endl;
   }
 }
 
@@ -172,16 +183,17 @@ void df_chunk_srv::list(int newfd)
   this->get_all_files(files, this->filesys);
   std::cout << "Get all files size: " << files.size() << std::endl;
 
-  std::string data;
+  std::string data(" ");
   if (files.size()) {
     for (auto file : files) {
       data += file + " ";
       std::cout << data << std::endl;
     }
-    // data += '\0';  // null terminated string
     std::cout << "List of files:" << data << std::endl;
   }
-  this->communication->write(newfd, data.c_str(), data.size());
+  df_reply_proto reply(OK, "LIST", data);
+  std::string rstr = reply.to_string();
+  this->communication->write(newfd, rstr.c_str(), rstr.size());
 }
 
 void df_chunk_srv::get(std::string filename)
@@ -195,7 +207,8 @@ void df_chunk_srv::put(std::string filename, std::string content)
 }
 
 
-void df_chunk_srv::get_all_files(std::vector<std::string> &out, const std::string &directory)
+void df_chunk_srv::get_all_files(std::vector<std::string> &out,
+				 const std::string &directory)
 {
   DIR *dir;
   class dirent *ent;

@@ -35,7 +35,8 @@ df_client::df_client(std::string& file)
 
 df_client::~df_client()
 {
-
+  delete this->config;
+  delete this->request;
 }
 
 void df_client::list()
@@ -57,11 +58,19 @@ void df_client::list()
     }
 
     std::string data(buff);
+    std::cout << data << std::endl;
+
+    df_reply_proto reply(data);
+    if (reply.ecode == ERR_INVALID_USER) {
+      std::cout << "ERROR: " << reply.emsg << std::endl;
+      continue; //continue processing with other users
+    }
 
     // split based on delimiter
-    auto files = utilities::split(data, [](int ch){ return (ch == ' '? 1 : 0); });
+    auto files = utilities::split(reply.contents, [](int ch){ return (ch == ' '? 1 : 0); });
+
     for (auto file : files)
-      std::cout << file << " [complete]" <<"\n";
+      std::cout << file << " [status]" <<"\n";
   }
 }
 
@@ -71,17 +80,28 @@ void df_client::get()
   std::cout << "Enter file name to get:";
   std::string file("");
   std::cin >> file;
-  char buf[128] = "GET hello.txt\0";
-  auto outchars = strlen(buf);
-
+  request->set_command("GET", file);
+  std::string cmd = request->to_string();
+  
   int ii = 0;
   for (auto& server : this->channels) {
-    server.second->write(this->sockfds[ii++], buf, outchars);
+    server.second->write(this->sockfds[ii++], cmd.c_str(), cmd.size());
   }
 }
 
 void df_client::put()
 {
+  system("clear");
+  std::cout << "Enter the file to put:";
+  std::string file("");
+  std::cin >> file;
+  request->set_command("PUT", file);
+  std::string cmd = request->to_string();
+  
+  int ii = 0;
+  for (auto& server : this->channels) {
+    server.second->write(this->sockfds[ii++], cmd.c_str(), cmd.size());
+  }
 
 }
 

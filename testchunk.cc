@@ -20,6 +20,8 @@ int main(int argc, char *argv[])
   try {
     df_chunk_srv srv(argv[1], atoi(argv[2]));
     srv.listen_forever();
+  } catch (char* msg) {
+    cout << "ERROR:" << msg << std::endl;
   } catch (...) {
     cout << "ERROR " << endl;
   }

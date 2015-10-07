@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "dfcomm.h"
+#include "dfconfig.h"
 
 namespace dfs {
   class df_chunk_srv {
@@ -23,6 +24,7 @@ namespace dfs {
     int port = -1;
     int sockfd;
     generic_comm* communication;
+    dfconfig* config;
 
     // lock for maintaining the consistancy on pending requests
     std::mutex request_lock;
