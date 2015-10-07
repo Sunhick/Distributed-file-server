@@ -9,7 +9,7 @@
 #include <fstream>
 #include <cstdlib>
 
-#include "include/dfutilities.h"
+#include "include/dfutils.h"
 
 using namespace dfs;
 

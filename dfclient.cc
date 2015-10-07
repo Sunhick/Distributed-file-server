@@ -13,7 +13,7 @@
 #include <iostream>
 #include <string.h>
 
-#include "include/dfutilities.h"
+#include "include/dfutils.h"
 
 using namespace dfs;
 
