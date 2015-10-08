@@ -45,11 +45,11 @@ namespace dfs {
     void start();
     void listen_forever();
     // list all available files under the server
-    void list(int newfd);
+    void list(int newfd, std::string& args);
     // get the piece information from the server
-    void get(std::string filename);
+    void get(int newfd, std::string& args);
     // store the chunk file in server
-    void put(std::string filename, std::string content);
+    void put(int newfd, std::string& content);
   };
 }
 

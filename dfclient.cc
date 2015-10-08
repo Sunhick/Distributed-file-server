@@ -9,9 +9,13 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-
-#include <iostream>
+#include <openssl/md5.h>
 #include <string.h>
+
+#include <thread>
+#include <chrono>
+#include <fstream>
+#include <iostream>
 
 #include "include/dfutils.h"
 
@@ -45,20 +49,19 @@ void df_client::list()
   request->set_command("LIST");
 
   int ii = 0;
-  char buff[2048] = {'\0'};
+  char buff[2048*5] = {'\0'};
   
   std::string command = request->to_string();
   std::cout << "listing contents" << std::endl;
   
   for (auto& server : this->channels) {
     server.second->write(this->sockfds[ii], command.c_str(), command.size());
-    if (server.second->read(this->sockfds[ii++], buff, 2048) == 0) {
+    if (server.second->read(this->sockfds[ii++], buff, 2048*5) == 0) {
       std::cout << "unable to read the data" << std::endl;
       continue;
     }
 
     std::string data(buff);
-    std::cout << data << std::endl;
 
     df_reply_proto reply(data);
     if (reply.ecode == ERR_INVALID_USER) {
@@ -67,8 +70,8 @@ void df_client::list()
     }
 
     // split based on delimiter
-    auto files = utilities::split(reply.contents, [](int ch){ return (ch == ' '? 1 : 0); });
-
+    auto files = utilities::split(reply.contents,
+				  [](int ch){ return (ch == ' '? 1 : 0); });
     for (auto file : files)
       std::cout << file << " [status]" <<"\n";
   }
@@ -84,25 +87,112 @@ void df_client::get()
   std::string cmd = request->to_string();
   
   int ii = 0;
-  for (auto& server : this->channels) {
-    server.second->write(this->sockfds[ii++], cmd.c_str(), cmd.size());
+  for (auto& channel : this->channels) {
+
+    auto& server = channel.second;
+    server->write(this->sockfds[ii], cmd.c_str(), cmd.size());
+
+    // while(true) {
+      char buff[2048*5] = {'\0'};
+      if (server->read(this->sockfds[ii], buff, 2048*5) == 0) {
+	std::cout << "unable to read the data" << std::endl;
+	continue;
+	// continue;
+      }
+
+      std::string reply = std::string(buff);
+      std::cout << reply << std::endl;
+      // df_reply_proto response(reply);
+      //}
+    ii++;
+    // reproduce the file from the server reply
+  } // for
+}
+
+// Get the number that represents the policy as to where to
+// put pieces of file in which servers
+// policy = MD5HASH(filename) % 4
+int df_client::get_policy(std::string file)
+{
+  MD5_CTX c;
+  unsigned char out[MD5_DIGEST_LENGTH];
+
+  MD5_Init(&c);
+  MD5_Update(&c, file.c_str(), file.length());
+  MD5_Final(out, &c);
+
+  std::string md5;
+
+  char buf[MD5_DIGEST_LENGTH];
+  for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
+    sprintf(buf, "%02x", out[i]);
+    md5.append( buf );
   }
+
+  // to compute MD5HASH(file) % 4, we need only last byte
+  short num = md5[MD5_DIGEST_LENGTH];
+  // md5[MD5_DIGEST_LENGTH] | (md5[MD5_DIGEST_LENGTH - 1] << 8);
+  return num % 4;
 }
 
 void df_client::put()
 {
   system("clear");
   std::cout << "Enter the file to put:";
-  std::string file("");
-  std::cin >> file;
-  request->set_command("PUT", file);
-  std::string cmd = request->to_string();
-  
-  int ii = 0;
-  for (auto& server : this->channels) {
-    server.second->write(this->sockfds[ii++], cmd.c_str(), cmd.size());
+  std::string filename("");
+  std::cin >> filename;
+  // request->arguments = std::string("");
+
+  // based on the policy number, place the chunk file
+  // in different chunk servers
+  int policy = get_policy(filename);
+  std::cout << "policy : " << policy << std::endl;
+
+  std::ifstream file(filename);
+  if (!file.is_open()) {
+    std::cout << "Error in reading file!" << filename << "\n";
+    return;
   }
 
+  file.seekg(0, std::ios_base::end);
+  size_t size = file.tellg();
+  file.seekg(0);
+
+  /*
+  file.seekg(0, std::ios::end);
+  size_t size = file.tellg();
+  std::string buffer(size, ' ');
+  file.seekg(0);
+  file.read(&buffer[0], size);
+  */
+
+  const size_t blockSize = 2048*5;
+  std::streampos pos = 0;
+  std::string data;
+ 
+  // write the actual file content in the df_reply_proto format
+  while ((pos = file.tellg()) >= 0 && (size_t)pos < size - 1){ 
+    data.resize(size - (size_t)pos < blockSize ? size - (size_t)pos : blockSize);
+    file.read(&data[0], data.size());
+
+    // send all the contents
+    request->set_command("PUT", filename + ":" + data);
+    std::string cmd = request->to_string();
+    
+    // std::this_thread::sleep_for (std::chrono::seconds(1));
+    /*    char ch;
+    std::cin >> ch;
+    system("clear");*/
+    std::cout << cmd << std::endl;
+    //todo: send data only to selected servers
+    int ii = 0;
+    for (auto& server : this->channels)
+      server.second->write(this->sockfds[ii++], cmd.c_str(), cmd.length());
+
+    // std::this_thread::sleep_for (std::chrono::seconds(1));
+  }
+  
+  file.close();
 }
 
 void df_client::start()

@@ -7,7 +7,7 @@
 
 CC = g++
 DBUG = -g -O0
-LDFLAGS = -pthread
+LDFLAGS = -pthread -lssl -lcrypto
 CCFLAGS = -Wall -std=c++11 $(DBUG) -I $(IDIR)
 
 IDIR = ./include
@@ -41,13 +41,13 @@ endif
 all: $(DFS) $(DFC) $(TEST)
 
 $(TEST): $(TEST_OBJS)
-	$(CC) $(LDFLAGS) $(TEST_OBJS) -o $@
+	$(CC) $(TEST_OBJS) -o $@ $(LDFLAGS)
 
 $(DFC): $(DFC_OBJS)
-	$(CC) $(LDFLAGS) $(DFC_OBJS) -o $@
+	$(CC) $(DFC_OBJS) -o $@ $(LDFLAGS)
 
 $(DFS): $(DFS_OBJS)
-	$(CC) $(LDFLAGS) $(DFS_OBJS) -o $@
+	$(CC) $(DFS_OBJS) -o $@ $(LDFLAGS)
 
 %.o: %.cc
 	$(CC) -c -o $@ $(CCFLAGS) $<
