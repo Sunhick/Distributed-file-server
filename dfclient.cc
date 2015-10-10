@@ -12,6 +12,7 @@
 #include <openssl/md5.h>
 #include <string.h>
 
+#include <vector>
 #include <thread>
 #include <chrono>
 #include <fstream>
@@ -28,6 +29,8 @@ df_client::df_client(std::string& file)
   this->config->get_username_password(name, password);
   this->request = new df_request_proto(name, password);
 
+  init_upload_policies();
+  
   for (auto server : this->config->get_all_servers()) {
     auto ip_address = server.second.ip_address;
     auto port = server.second.port;
@@ -43,20 +46,130 @@ df_client::~df_client()
   delete this->request;
 }
 
+void df_client::init_upload_policies()
+{
+  std::vector<struct upload_policy> p0, p1, p2, p3;
+
+  //----------- x = 0
+  struct upload_policy p;
+  p.name = "DFS1";
+  p.chunk_ids.push_back(1);
+  p.chunk_ids.push_back(2);
+  p0.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS2";
+  p.chunk_ids.push_back(2);
+  p.chunk_ids.push_back(3);
+  p0.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS3";
+  p.chunk_ids.push_back(3);
+  p.chunk_ids.push_back(4);
+  p0.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS4";
+  p.chunk_ids.push_back(4);
+  p.chunk_ids.push_back(1);
+  p0.push_back(p);
+  
+  //----------- x = 1
+  p.chunk_ids.clear();
+  p.name = "DFS1";
+  p.chunk_ids.push_back(4);
+  p.chunk_ids.push_back(1);
+  p1.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS2";
+  p.chunk_ids.push_back(1);
+  p.chunk_ids.push_back(2);
+  p1.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS3";
+  p.chunk_ids.push_back(2);
+  p.chunk_ids.push_back(3);
+  p1.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS4";
+  p.chunk_ids.push_back(3);
+  p.chunk_ids.push_back(4);
+  p1.push_back(p);
+
+  //----------- x = 2
+  p.chunk_ids.clear();
+  p.name = "DFS1";
+  p.chunk_ids.push_back(3);
+  p.chunk_ids.push_back(4);
+  p2.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS2";
+  p.chunk_ids.push_back(4);
+  p.chunk_ids.push_back(1);
+  p2.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS3";
+  p.chunk_ids.push_back(1);
+  p.chunk_ids.push_back(2);
+  p2.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS4";
+  p.chunk_ids.push_back(2);
+  p.chunk_ids.push_back(3);
+  p2.push_back(p);
+
+  //----------- x = 3
+  p.chunk_ids.clear();
+  p.name = "DFS1";
+  p.chunk_ids.push_back(2);
+  p.chunk_ids.push_back(3);
+  p3.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS2";
+  p.chunk_ids.push_back(3);
+  p.chunk_ids.push_back(4);
+  p3.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS3";
+  p.chunk_ids.push_back(4);
+  p.chunk_ids.push_back(1);
+  p3.push_back(p);
+
+  p.chunk_ids.clear();
+  p.name = "DFS4";
+  p.chunk_ids.push_back(1);
+  p.chunk_ids.push_back(2);
+  p3.push_back(p);  
+
+  upload_policies.insert(std::pair<int, std::vector<struct upload_policy>>(0, p0));
+  upload_policies.insert(std::pair<int, std::vector<struct upload_policy>>(1, p1));
+  upload_policies.insert(std::pair<int, std::vector<struct upload_policy>>(2, p2));
+  upload_policies.insert(std::pair<int, std::vector<struct upload_policy>>(3, p3));  
+}
+
 void df_client::list()
 {
   system("clear");
   request->set_command("LIST");
 
   int ii = 0;
-  char buff[2048*5] = {'\0'};
+  char buff[2048*2] = {'\0'};
   
   std::string command = request->to_string();
   std::cout << "listing contents" << std::endl;
   
   for (auto& server : this->channels) {
     server.second->write(this->sockfds[ii], command.c_str(), command.size());
-    if (server.second->read(this->sockfds[ii++], buff, 2048*5) == 0) {
+    if (server.second->read(this->sockfds[ii++], buff, 2048*2) == 0) {
       std::cout << "unable to read the data" << std::endl;
       continue;
     }
@@ -85,25 +198,24 @@ void df_client::get()
   std::cin >> file;
   request->set_command("GET", file);
   std::string cmd = request->to_string();
-  
+
   int ii = 0;
   for (auto& channel : this->channels) {
-
     auto& server = channel.second;
     server->write(this->sockfds[ii], cmd.c_str(), cmd.size());
 
     // while(true) {
-      char buff[2048*5] = {'\0'};
-      if (server->read(this->sockfds[ii], buff, 2048*5) == 0) {
-	std::cout << "unable to read the data" << std::endl;
-	continue;
-	// continue;
-      }
+    char buff[2048*2] = {'\0'};
+    if (server->read(this->sockfds[ii], buff, 2048*2) == 0) {
+      std::cout << "unable to read the data" << std::endl;
+      continue;
+      // continue;
+    }
 
-      std::string reply = std::string(buff);
-      std::cout << reply << std::endl;
-      // df_reply_proto response(reply);
-      //}
+    std::string reply = std::string(buff);
+    std::cout << reply << std::endl;
+    // df_reply_proto response(reply);
+    //}
     ii++;
     // reproduce the file from the server reply
   } // for
@@ -153,44 +265,43 @@ void df_client::put()
     std::cout << "Error in reading file!" << filename << "\n";
     return;
   }
-
-  file.seekg(0, std::ios_base::end);
-  size_t size = file.tellg();
-  file.seekg(0);
-
   /*
-  file.seekg(0, std::ios::end);
+    file.seekg(0, std::ios_base::end);
+    size_t size = file.tellg();
+    file.seekg(0);
+  */
+  // file.seekg(0, std::ios::end);
+  file.seekg(0, std::ios_base::end);
   size_t size = file.tellg();
   std::string buffer(size, ' ');
   file.seekg(0);
   file.read(&buffer[0], size);
-  */
 
-  const size_t blockSize = 2048*5;
-  std::streampos pos = 0;
-  std::string data;
+  /*  const size_t blockSize = 2048*5;
+      std::streampos pos = 0;
+      std::string data;*/
  
   // write the actual file content in the df_reply_proto format
-  while ((pos = file.tellg()) >= 0 && (size_t)pos < size - 1){ 
-    data.resize(size - (size_t)pos < blockSize ? size - (size_t)pos : blockSize);
-    file.read(&data[0], data.size());
+  // while ((pos = file.tellg()) >= 0 && (size_t)pos < size - 1){ 
+  // data.resize(size - (size_t)pos < blockSize ? size - (size_t)pos : blockSize);
+  //file.read(&data[0], data.size());
 
-    // send all the contents
-    request->set_command("PUT", filename + ":" + data);
-    std::string cmd = request->to_string();
+  // send all the contents
+  request->set_command("PUT", filename + ":" + buffer);
+  std::string cmd = request->to_string();
     
-    // std::this_thread::sleep_for (std::chrono::seconds(1));
-    /*    char ch;
-    std::cin >> ch;
-    system("clear");*/
-    std::cout << cmd << std::endl;
-    //todo: send data only to selected servers
-    int ii = 0;
-    for (auto& server : this->channels)
-      server.second->write(this->sockfds[ii++], cmd.c_str(), cmd.length());
+  // std::this_thread::sleep_for (std::chrono::seconds(1));
+  /*    char ch;
+	std::cin >> ch;
+	system("clear");*/
+  std::cout << "PUT CMD:" << cmd << std::endl;
+  //todo: send data only to selected servers
+  int ii = 0;
+  for (auto& server : this->channels)
+    server.second->write(this->sockfds[ii++], cmd.c_str(), cmd.length());
 
-    // std::this_thread::sleep_for (std::chrono::seconds(1));
-  }
+  // std::this_thread::sleep_for (std::chrono::seconds(1));
+  //}
   
   file.close();
 }

@@ -118,8 +118,9 @@ void df_chunk_srv::dispatch_request(int newfd)
 	    <<  " socket Id: " << newfd << std::endl;  
   
   while (true) {
-    char buff[2048*5] = {'\0'};
-    if (communication->read(newfd, buff, 2048*5) < 0) {
+
+    char buff[2048*2] = {'\0'};
+    if (communication->read(newfd, buff, 2048*2) < 0) {
       std::cout << "Client closed! Unable to read the socket!" << std::endl;
       break;
     }
@@ -148,6 +149,16 @@ void df_chunk_srv::dispatch_request(int newfd)
   }
 }
 
+void df_chunk_srv::switch_session(std::string username)
+{
+  std::string filepath = this->filesys + "/" + username;
+  struct stat st = {0};
+  // create a File system if it doesn't exists
+  if (stat(filepath.c_str(), &st) == -1) {
+    mkdir(filepath.c_str(), PERMISSIONS);
+  }
+}
+
 // entry point of all client request handling.
 // first validate the user and then process the request
 void df_chunk_srv::handle(std::string reqstr, int newfd) 
@@ -163,15 +174,20 @@ void df_chunk_srv::handle(std::string reqstr, int newfd)
     return;
   }
 
+  //look for the user directory. Create one if not available
+  std::string username = request.username;
+  std::cout << username << std::endl;
+  switch_session(username);
+  
   std::string cmd = request.command;
   std::string args = request.arguments;
   
   if (cmd == "LIST") {
-    list(newfd,args);
+    list(newfd,args, username);
   } else if (cmd == "GET") {
-    get(newfd, args);
+    get(newfd, args, username);
   } else if (cmd == "PUT") {
-    put(newfd, args);
+    put(newfd, args, username);
   } else {
     std::cout << "Invalid request from df client! Cmd:" << cmd << std::endl;
   }
@@ -182,15 +198,19 @@ void df_chunk_srv::listen_forever()
   this->start();
 }
 
-void df_chunk_srv::list(int newfd, std::string& arguments)
+void df_chunk_srv::list(int newfd,
+			std::string& arguments,
+			const std::string& username)
 {
   std::vector<std::string> files;
-  this->get_all_files(files, this->filesys);
+  std::string dir = this->filesys + "/" + username;
+  std::cout << "list: " << dir << std::endl;
+  this->get_all_files(files, dir);
   std::cout << "Get all files size: " << files.size() << std::endl;
 
   std::string data(" ");
   if (files.size()) {
-    for (auto file : files)
+    for (auto& file : files)
       data += file + " ";
     std::cout << "List of files:" << data << std::endl;
   }
@@ -200,14 +220,17 @@ void df_chunk_srv::list(int newfd, std::string& arguments)
   this->communication->write(newfd, rstr.c_str(), rstr.size());
 }
 
-void df_chunk_srv::get(int newfd, std::string& filename)
+void df_chunk_srv::get(int newfd,
+		       std::string& filename,
+		       const std::string& username)
 {
   auto file_exists = [] (const std::string& name) {
     struct stat buffer;
     return (stat (name.c_str(), &buffer) == 0);    
   };
 
-  std::string filepath = this->filesys + "/" + filename;
+  std::string filepath = this->filesys + "/" + username  + "/" + filename;
+  std::cout << "get:" << filepath << std::endl;
 
   if(!file_exists(filepath)) {
     std::cout << "File not found: ["  << filepath << "]" << std::endl;
@@ -233,32 +256,33 @@ void df_chunk_srv::get(int newfd, std::string& filename)
   // const size_t blockSize = 2048*5;
   // std::streampos pos = 0;
   // std::string data;
-
-  file.seekg(0);
+  // file.seekg(0);
   file.read(&buffer[0], size);
   
   df_reply_proto reply(OK, filename, buffer);
   std::string rstr = reply.to_string();
-  this->communication->write(newfd, rstr.c_str(), rstr.size());
+  this->communication->write(newfd, rstr.c_str(), 2048*2 /*rstr.size()*/);
   std::cout << rstr << std::endl;
 
-    /* 
+  /* 
   // write the actual file content in the df_reply_proto format
   while ((pos = file.tellg()) >= 0 && (size_t)pos < size - 1){ 
-    data.resize(size - (size_t)pos < blockSize ? size - (size_t)pos : blockSize);
-    file.read(&data[0], data.size());
-    df_reply_proto reply(OK, filename, data);
-    std::string rstr = reply.to_string();
-    this->communication->write(newfd, rstr.c_str(), rstr.size());
-    std::cout << rstr << std::endl;
-    // wait for the client to process
-    // std::this_thread::sleep_for (std::chrono::seconds(1));
-    }*/
+  data.resize(size - (size_t)pos < blockSize ? size - (size_t)pos : blockSize);
+  file.read(&data[0], data.size());
+  df_reply_proto reply(OK, filename, data);
+  std::string rstr = reply.to_string();
+  this->communication->write(newfd, rstr.c_str(), rstr.size());
+  std::cout << rstr << std::endl;
+  // wait for the client to process
+  // std::this_thread::sleep_for (std::chrono::seconds(1));
+  }*/
 
   file.close();
 }
 
-void df_chunk_srv::put(int newfd, std::string& content)
+void df_chunk_srv::put(int newfd,
+		       std::string& content,
+		       const std::string& username)
 {
   // split the content to extract the filename
   std::string::size_type pos;
@@ -268,7 +292,7 @@ void df_chunk_srv::put(int newfd, std::string& content)
     std::string filename = content.substr(0, pos); 
     std::string data = content.substr(pos+1, content.size());
 
-    std::string fpath = this->filesys + "/" + filename;
+    std::string fpath = this->filesys + "/" + username + "/" + filename;
     std::fstream file(fpath, std::ofstream::out | std::ofstream::in);
     if (file.is_open()) {
       // warning! file already exists. Maybe the client wants to append

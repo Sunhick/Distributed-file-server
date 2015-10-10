@@ -8,6 +8,7 @@
 
 #include <string>
 #include <map>
+#include <vector>
 
 #include "dfcomm.h"
 #include "dfconfig.h"
@@ -21,6 +22,8 @@ namespace dfs {
     std::map<std::string, generic_comm*> channels;
     dfconfig* config;
     std::vector<int> sockfds;
+    std::map<int, std::vector<struct upload_policy>> upload_policies;
+    
     // df request protocol. re-use the packet
     // declare once and use multiple times by changing the command
     df_request_proto* request;
@@ -36,11 +39,17 @@ namespace dfs {
     // the policy number which represents where to store piece of
     // file in which server
     int get_policy(std::string file);
+    void init_upload_policies();
     
   public:
     df_client(std::string& file);
     ~df_client();
     void start();
+  };
+
+  struct upload_policy {
+    std::string name;	//server name
+    std::vector<int> chunk_ids;
   };
 }
 #endif

@@ -34,6 +34,9 @@ namespace dfs {
     // handle the df client server request
     void dispatch_request(int newfd);
 
+    // switch to the user session. 
+    void switch_session(std::string user);
+
     // get the list of all files given the directory
     void get_all_files(std::vector<std::string> &out, const std::string &directory);
     void handle(std::string request, int sockfd);
@@ -45,11 +48,11 @@ namespace dfs {
     void start();
     void listen_forever();
     // list all available files under the server
-    void list(int newfd, std::string& args);
+    void list(int newfd, std::string& args, const std::string& username);
     // get the piece information from the server
-    void get(int newfd, std::string& args);
+    void get(int newfd, std::string& args, const std::string& username);
     // store the chunk file in server
-    void put(int newfd, std::string& content);
+    void put(int newfd, std::string& content, const std::string& username);
   };
 }
 
