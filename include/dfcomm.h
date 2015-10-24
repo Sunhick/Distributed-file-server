@@ -18,6 +18,11 @@ namespace dfs {
   // Abstract the communication between two same/different hosts
   // generic communication interface
   class generic_comm {
+  protected:
+    int socketfd;
+    std::string host;
+    int port;
+
   public:
     // open the communication channel
     virtual int open(int backlog) = 0;
@@ -33,6 +38,7 @@ namespace dfs {
 
     // write data to the host
     virtual ssize_t write(int fd, const void *buf, size_t count) = 0;
+    virtual ssize_t write(const void *buf, size_t count) = 0;
     
     generic_comm() { } 
     virtual ~generic_comm() { }
@@ -41,10 +47,6 @@ namespace dfs {
   // defines the socket based communication between client and server
   class df_socket_comm : public generic_comm {
   private:
-    int socketfd;
-    std::string host;
-    int port;
-
     int die(const char *format, ...);
 
   public:
@@ -56,6 +58,8 @@ namespace dfs {
     virtual int connect();
 
     virtual ssize_t write(int fd, const void *buf, size_t count);
+    virtual ssize_t write(const void *buf, size_t count);
+
     virtual ssize_t read(int fd, void *buf, size_t count);
   };
 

@@ -30,8 +30,10 @@ namespace dfs {
 
     // list all files available under all servers
     void list();
+
     // get the specified file from available server
     void get();
+
     // put the specified file under the given server based
     // the traffic etc
     void put();

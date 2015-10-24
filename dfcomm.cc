@@ -46,7 +46,6 @@ int df_socket_comm::die(const char *format, ...)
 int df_socket_comm::open(int backlog)
 {
   struct sockaddr_in sin; 	// an Internet endpoint address 
-  int sockfd;               	// socket descriptor 
 
   memset(&sin, 0, sizeof(sin));
   sin.sin_family = AF_INET;
@@ -61,33 +60,33 @@ int df_socket_comm::open(int backlog)
 
   // Map port number (char string) to port number (int)
   if ((sin.sin_port=htons((unsigned short)this->port)) == 0)
-    die("can't get \"%sockfd\" port number\n", this->port);
+    die("can't get \"%socketfd\" port number\n", this->port);
 
   // Allocate a socket
-  sockfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (sockfd < 0)
-    die("can't create socket: %sockfd\n", strerror(errno));
+  socketfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (socketfd < 0)
+    die("can't create socket: %socketfd\n", strerror(errno));
 
   // Bind the socket
-  if (bind(sockfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
+  if (bind(socketfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
     fprintf(stderr, "can't bind to %d port: %s; Trying other port\n",
 	    this->port, strerror(errno));
     sin.sin_port=htons(0); /* request a port number to be allocated
 			      by bind */
-    if (bind(sockfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
-      die("can't bind: %sockfd\n", strerror(errno));
+    if (bind(socketfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
+      die("can't bind: %socketfd\n", strerror(errno));
     } else {
       int socklen = sizeof(sin);
-      if (getsockname(sockfd, (struct sockaddr *)&sin, (socklen_t *)&socklen) < 0)
-	die("getsockname: %sockfd\n", strerror(errno));
+      if (getsockname(socketfd, (struct sockaddr *)&sin, (socklen_t *)&socklen) < 0)
+	die("getsockname: %socketfd\n", strerror(errno));
       printf("New server port number is %d\n", ntohs(sin.sin_port));
     }
   }
 
-  if (listen(sockfd, backlog) < 0)
-    die("can't listen on %sockfd port: %sockfd\n", this->port, strerror(errno));
+  if (listen(socketfd, backlog) < 0)
+    die("can't listen on %socketfd port: %socketfd\n", this->port, strerror(errno));
 
-  return sockfd;
+  return socketfd;
 }
 
 int df_socket_comm::connect()
@@ -122,6 +121,7 @@ int df_socket_comm::connect()
   if (::connect(sockd, (struct sockaddr *)&sin, sizeof(sin)) < 0)
     die("can't connect to %sockd.%sockd: %sockd\n", host, portnum,
 	strerror(errno));
+  socketfd = sockd;
   return sockd;
 }
 
@@ -133,6 +133,11 @@ ssize_t df_socket_comm::read(int fd, void* buf, size_t count)
 ssize_t df_socket_comm::write(int fd, const void *buf, size_t count)
 {
   return ::write(fd, buf, count);
+}
+
+ssize_t df_socket_comm::write(const void *buf, size_t count) 
+{
+  return write(socketfd, buf, count);
 }
 
 int df_socket_comm::accept(int sockfd)

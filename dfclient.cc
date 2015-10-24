@@ -162,12 +162,13 @@ void df_client::list()
   request->set_command("LIST");
 
   int ii = 0;
-  char buff[2048*2] = {'\0'};
   
   std::string command = request->to_string();
   std::cout << "listing contents" << std::endl;
   
   for (auto& server : this->channels) {
+    char buff[2048*2] = {'\0'};
+
     server.second->write(this->sockfds[ii], command.c_str(), command.size());
     if (server.second->read(this->sockfds[ii++], buff, 2048*2) == 0) {
       std::cout << "unable to read the data" << std::endl;
@@ -182,6 +183,7 @@ void df_client::list()
       continue; //continue processing with other users
     }
 
+    // std::cout << server.first << " raw-response: " + reply.contents << std::endl;
     // split based on delimiter
     auto files = utilities::split(reply.contents,
 				  [](int ch){ return (ch == ' '? 1 : 0); });
@@ -280,6 +282,23 @@ void df_client::put()
   /*  const size_t blockSize = 2048*5;
       std::streampos pos = 0;
       std::string data;*/
+
+  constexpr int NUM_SERVERS = 4;
+  int part_size = size / NUM_SERVERS;
+  std::vector<std::string> parts;
+  parts.push_back(buffer.substr(0*part_size, 1*part_size));
+  parts.push_back(buffer.substr(1*part_size, 2*part_size));
+  parts.push_back(buffer.substr(2*part_size, 3*part_size));
+  parts.push_back(buffer.substr(3*part_size, size - 3*part_size));
+
+  for (auto &polices : upload_policies[policy]) {
+    for (auto &chunk_num : polices.chunk_ids) {
+      request->set_command("PUT",
+	      filename + "." + std::to_string(chunk_num) + ":" + parts[chunk_num-1]);
+      std::string cmd = request->to_string();
+      this->channels[polices.name]->write(cmd.c_str(), cmd.length());
+    }
+  }
  
   // write the actual file content in the df_reply_proto format
   // while ((pos = file.tellg()) >= 0 && (size_t)pos < size - 1){ 
@@ -287,18 +306,18 @@ void df_client::put()
   //file.read(&data[0], data.size());
 
   // send all the contents
-  request->set_command("PUT", filename + ":" + buffer);
-  std::string cmd = request->to_string();
+  // request->set_command("PUT", filename + ":" + buffer);
+  // std::string cmd = request->to_string();
     
   // std::this_thread::sleep_for (std::chrono::seconds(1));
   /*    char ch;
 	std::cin >> ch;
 	system("clear");*/
-  std::cout << "PUT CMD:" << cmd << std::endl;
+  // std::cout << "PUT CMD:" << cmd << std::endl;
   //todo: send data only to selected servers
-  int ii = 0;
-  for (auto& server : this->channels)
-    server.second->write(this->sockfds[ii++], cmd.c_str(), cmd.length());
+  // int ii = 0;
+  // for (auto& server : this->channels)
+  // server.second->write(this->sockfds[ii++], cmd.c_str(), cmd.length());
 
   // std::this_thread::sleep_for (std::chrono::seconds(1));
   //}
