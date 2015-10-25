@@ -53,6 +53,8 @@ namespace dfs {
     void get(int newfd, std::string& args, const std::string& username);
     // store the chunk file in server
     void put(int newfd, std::string& content, const std::string& username);
+    // make directory for the user
+    void mkdir(int newfd, std::string& arguments, const std::string& username);
   };
 }
 

@@ -38,6 +38,8 @@ namespace dfs {
     // the traffic etc
     void put();
 
+    void mkdir();
+
     // the policy number which represents where to store piece of
     // file in which server
     int get_policy(std::string file);

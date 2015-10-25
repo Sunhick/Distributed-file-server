@@ -46,7 +46,7 @@ df_chunk_srv::df_chunk_srv(std::string filesys, int port)
   struct stat st = {0};
   // create a File system if it doesn't exists
   if (stat(filesys.c_str(), &st) == -1) {
-    mkdir(filesys.c_str(), PERMISSIONS);
+    ::mkdir(filesys.c_str(), PERMISSIONS);
   }
 }
 
@@ -155,7 +155,7 @@ void df_chunk_srv::switch_session(std::string username)
   struct stat st = {0};
   // create a File system if it doesn't exists
   if (stat(filepath.c_str(), &st) == -1) {
-    mkdir(filepath.c_str(), PERMISSIONS);
+    ::mkdir(filepath.c_str(), PERMISSIONS);
   }
 }
 
@@ -188,14 +188,28 @@ void df_chunk_srv::handle(std::string reqstr, int newfd)
     get(newfd, args, username);
   } else if (cmd == "PUT") {
     put(newfd, args, username);
+  } else if (cmd == "MKDIR") {
+    mkdir(newfd, args, username);
   } else {
-    std::cout << "Invalid request from df client! Cmd:" << cmd << std::endl;
+    std::cout << "Invalid request from df client! cmd:" << cmd << std::endl;
   }
 }
 
 void df_chunk_srv::listen_forever()
 {
   this->start();
+}
+
+void df_chunk_srv::mkdir(int newfd, std::string& arguments,
+			 const std::string& username)
+{
+  std::string folder = filesys + "/" + username  + "/" + arguments;
+  std::cout << "MKDIR : " << folder << std::endl;
+  struct stat st = {0};
+  // create a File system if it doesn't exists
+  if (stat(folder.c_str(), &st) == -1) {
+    ::mkdir(folder.c_str(), PERMISSIONS);
+  }
 }
 
 void df_chunk_srv::list(int newfd,

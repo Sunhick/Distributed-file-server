@@ -35,6 +35,7 @@ namespace dfs {
 
     // read the data from host
     virtual ssize_t read(int fd, void *buf, size_t count) = 0;
+    virtual ssize_t read(void* buf, size_t count) = 0;
 
     // write data to the host
     virtual ssize_t write(int fd, const void *buf, size_t count) = 0;
@@ -61,6 +62,7 @@ namespace dfs {
     virtual ssize_t write(const void *buf, size_t count);
 
     virtual ssize_t read(int fd, void *buf, size_t count);
+    virtual ssize_t read(void *buf, size_t count);
   };
 
   // defines the pipe based communication between two process

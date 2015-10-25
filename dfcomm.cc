@@ -93,8 +93,6 @@ int df_socket_comm::connect()
 {
   struct hostent  *host_entry;   // pointer to host information entry
   struct sockaddr_in sin;        // an Internet endpoint address
-  int     sockd;                 // socket descriptor
-
 
   memset(&sin, 0, sizeof(sin));
   sin.sin_family = AF_INET;
@@ -113,21 +111,24 @@ int df_socket_comm::connect()
     die("can't get \"%sockd\" host entry\n", host);
 
   // Allocate a socket
-  sockd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (sockd < 0)
+  socketfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (socketfd < 0)
     die("can't create socket: %sockd\n", strerror(errno));
 
   // Connect the socket
-  if (::connect(sockd, (struct sockaddr *)&sin, sizeof(sin)) < 0)
-    die("can't connect to %sockd.%sockd: %sockd\n", host, portnum,
-	strerror(errno));
-  socketfd = sockd;
-  return sockd;
+  if (::connect(socketfd, (struct sockaddr *)&sin, sizeof(sin)) < 0)
+    die("can't connect to %sockd.%sockd: %sockd\n", host, portnum, strerror(errno));
+  return socketfd;
 }
 
 ssize_t df_socket_comm::read(int fd, void* buf, size_t count)
 {
   return ::read(fd, buf, count);
+}
+
+ssize_t df_socket_comm::read(void* buf, size_t count)
+{
+  return read(socketfd, buf, count);
 }
 
 ssize_t df_socket_comm::write(int fd, const void *buf, size_t count)

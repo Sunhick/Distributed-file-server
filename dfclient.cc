@@ -12,6 +12,8 @@
 #include <openssl/md5.h>
 #include <string.h>
 
+#include <iomanip>
+#include <cstdlib>
 #include <vector>
 #include <thread>
 #include <chrono>
@@ -160,18 +162,21 @@ void df_client::list()
 {
   system("clear");
   request->set_command("LIST");
-
-  int ii = 0;
   
   std::string command = request->to_string();
   std::cout << "listing contents" << std::endl;
-  
+
+  // map of file names and chucks
+  std::map<std::string, std::vector<int>> files;
+
   for (auto& server : this->channels) {
     char buff[2048*2] = {'\0'};
 
-    server.second->write(this->sockfds[ii], command.c_str(), command.size());
-    if (server.second->read(this->sockfds[ii++], buff, 2048*2) == 0) {
-      std::cout << "unable to read the data" << std::endl;
+    server.second->write(command.c_str(), command.size());
+    if (server.second->read(buff, 2048*2) == 0) {
+      this->channels.erase(server.first);
+      std::cout << "unable to read the data. Server is down! Updated the server list!" << std::endl;
+      std::cout << "No. of alive servers: " << this->channels.size() << std::endl;
       continue;
     }
 
@@ -185,10 +190,39 @@ void df_client::list()
 
     // std::cout << server.first << " raw-response: " + reply.contents << std::endl;
     // split based on delimiter
-    auto files = utilities::split(reply.contents,
+    auto filenames = utilities::split(reply.contents,
 				  [](int ch){ return (ch == ' '? 1 : 0); });
-    for (auto file : files)
-      std::cout << file << " [status]" <<"\n";
+
+    for (auto &name : filenames) {
+      auto tilldot = name.find_last_of(".");
+      if (tilldot == std::string::npos) {
+	std::cout << "no extension found! " << name << std::endl;
+	continue;
+      }
+
+      auto file = name.substr(0, tilldot);
+      auto chunk = std::atoi(name.substr(tilldot+1).c_str());
+      if (files.find(file) == files.end())
+       	files.insert(std::pair<std::string, std::vector<int>>(file, std::vector<int>()));
+
+      auto chunks = files[file];
+
+      if (std::find(chunks.begin(), chunks.end(), chunk) == chunks.end())
+	files[file].push_back(chunk);
+    }
+  }
+
+  auto get_file_status  = [](int fcount) { return fcount == 4 ? "Complete" : "Incomplete"; };
+
+  modifier green(color::FG_GREEN);
+  modifier def(color::FG_DEFAULT);
+  modifier red(color::FG_RED);
+
+  for (auto &name : files) {
+    auto status = get_file_status(name.second.size());
+    auto status_color = status == std::string("Complete") ? green : red;
+    std::cout << std::left << std::setw(20) << name.first << std::right << std::setw(10) << "\t[ " <<
+      status_color << status << def << " ]" << std::endl;    
   }
 }
 
@@ -267,24 +301,14 @@ void df_client::put()
     std::cout << "Error in reading file!" << filename << "\n";
     return;
   }
-  /*
-    file.seekg(0, std::ios_base::end);
-    size_t size = file.tellg();
-    file.seekg(0);
-  */
-  // file.seekg(0, std::ios::end);
+
   file.seekg(0, std::ios_base::end);
   size_t size = file.tellg();
   std::string buffer(size, ' ');
   file.seekg(0);
   file.read(&buffer[0], size);
 
-  /*  const size_t blockSize = 2048*5;
-      std::streampos pos = 0;
-      std::string data;*/
-
-  constexpr int NUM_SERVERS = 4;
-  int part_size = size / NUM_SERVERS;
+  int part_size = size / this->channels.size();
   std::vector<std::string> parts;
   parts.push_back(buffer.substr(0*part_size, 1*part_size));
   parts.push_back(buffer.substr(1*part_size, 2*part_size));
@@ -299,30 +323,24 @@ void df_client::put()
       this->channels[polices.name]->write(cmd.c_str(), cmd.length());
     }
   }
- 
-  // write the actual file content in the df_reply_proto format
-  // while ((pos = file.tellg()) >= 0 && (size_t)pos < size - 1){ 
-  // data.resize(size - (size_t)pos < blockSize ? size - (size_t)pos : blockSize);
-  //file.read(&data[0], data.size());
 
-  // send all the contents
-  // request->set_command("PUT", filename + ":" + buffer);
-  // std::string cmd = request->to_string();
-    
-  // std::this_thread::sleep_for (std::chrono::seconds(1));
-  /*    char ch;
-	std::cin >> ch;
-	system("clear");*/
-  // std::cout << "PUT CMD:" << cmd << std::endl;
-  //todo: send data only to selected servers
-  // int ii = 0;
-  // for (auto& server : this->channels)
-  // server.second->write(this->sockfds[ii++], cmd.c_str(), cmd.length());
-
-  // std::this_thread::sleep_for (std::chrono::seconds(1));
-  //}
-  
   file.close();
+}
+
+void df_client::mkdir()
+{
+  system("clear");
+  std::cout << "Enter the directory name you want to create:";
+  std::string dirname;
+  std::cin >> dirname;
+
+  request->set_command("MKDIR");
+  request->arguments = std::string(dirname);
+  for (auto &channel : this->channels) {
+    auto cmd = request->to_string();
+    channel.second->write(cmd.c_str(), cmd.length());
+  }
+
 }
 
 void df_client::start()
@@ -336,7 +354,7 @@ void df_client::start()
 
   while(true) {
     int choice;
-    std::cout << "Enter your choice:" << "1. LIST  2. GET  3. PUT  4.EXIT" << std::endl;
+    std::cout << "Enter your choice:" << "1. LIST  2. GET  3. PUT 4. MKDIR 5.EXIT" << std::endl;
     std::cin >> choice;
     
     switch(choice) {
@@ -355,9 +373,13 @@ void df_client::start()
 	put();
 	break;
       }
-
-    default:
     case 4:
+      {
+	mkdir();
+	break;
+      }
+    default:
+    case 5:
       {
 	for (int id : sockfds)
 	  close(id);
