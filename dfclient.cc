@@ -10,12 +10,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <openssl/md5.h>
-#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/select.h>
 
+#include <string>
+#include <algorithm>
 #include <iomanip>
 #include <cstdlib>
 #include <vector>
@@ -27,6 +28,10 @@
 #include "include/dfutils.h"
 
 using namespace dfs;
+
+modifier green(color::FG_GREEN);
+modifier def(color::FG_DEFAULT);
+modifier red(color::FG_RED);
 
 df_client::df_client(std::string& file)
 {
@@ -184,13 +189,12 @@ bool df_client::server_timeout(int filedesc)
   return false;
 }
 
-void df_client::list()
+void df_client::list(std::string folder)
 {
-  system("clear");
   request->set_command("LIST");
+  request->arguments = folder;
   
   std::string command = request->to_string();
-  std::cout << "listing contents" << std::endl;
 
   // map of file names and chucks
   std::map<std::string, std::vector<int>> files;
@@ -246,10 +250,6 @@ void df_client::list()
 
   auto get_file_status  = [](int fcount) { return fcount == 4 ? "Complete" : "Incomplete"; };
 
-  modifier green(color::FG_GREEN);
-  modifier def(color::FG_DEFAULT);
-  modifier red(color::FG_RED);
-
   for (auto &name : files) {
     auto status = get_file_status(name.second.size());
     auto status_color = status == std::string("Complete") ? green : red;
@@ -258,12 +258,8 @@ void df_client::list()
   }
 }
 
-void df_client::get() 
+void df_client::get(std::string file) 
 {
-  system("clear");
-  std::cout << "Enter file name to get:";
-  std::string file("");
-  std::cin >> file;
   request->set_command("GET", file);
   std::string cmd = request->to_string();
 
@@ -317,10 +313,6 @@ void df_client::get()
     } // for 2 times
   } // for each server
 
-  modifier red(FG_RED);
-  modifier def(FG_DEFAULT);
-  modifier green(FG_GREEN);
-
   if (part_files.size() < 4) {
     std::cout << red << "Missing files! Unable to assemble file" << def << std::endl;
     return;
@@ -340,10 +332,9 @@ void df_client::get()
 
   dfile << "--------------------" << file << "--------------------------" << std::endl;
   
-  for (auto& file : part_files) {
-    std::cout << file.first << std::endl;
+  for (auto& file : part_files)
     dfile << file.second;
-  }
+
   std::cout << green << "File downloaded! check download.txt" << def <<std::endl;
   dfile.close();
 }
@@ -354,7 +345,7 @@ bool df_client::get_filename_chunknum(const std::string& msg,
 {
   auto tilldot = msg.find_last_of(".");
   if (tilldot == std::string::npos) {
-    std::cout << "no extension found! " << msg << std::endl;
+    std::cout << red << "No extension found! " << msg << def << std::endl;
     return false;
   }
 
@@ -389,22 +380,15 @@ int df_client::get_policy(std::string file)
   return num % 4;
 }
 
-void df_client::put()
+void df_client::put(std::string filename, std::string folder)
 {
-  system("clear");
-  std::cout << "Enter the file to put:";
-  std::string filename("");
-  std::cin >> filename;
-  // request->arguments = std::string("");
-
   // based on the policy number, place the chunk file
   // in different chunk servers
   int policy = get_policy(filename);
-  std::cout << "policy : " << policy << std::endl;
 
   std::ifstream file(filename);
   if (!file.is_open()) {
-    std::cout << "Error in reading file!" << filename << "\n";
+    std::cout << red << "Error in reading file:" << filename << def <<"\n";
     return;
   }
 
@@ -415,7 +399,7 @@ void df_client::put()
   file.read(&buffer[0], size);
 
   int part_size = (int)size / this->channels.size();
-  std::cout << "Size:" << part_size << std::endl;
+
   std::vector<std::string> parts;
   parts.push_back(buffer.substr(0*part_size, 1*part_size));
   parts.push_back(buffer.substr(1*part_size, 2*part_size));
@@ -434,13 +418,8 @@ void df_client::put()
   file.close();
 }
 
-void df_client::mkdir()
+void df_client::mkdir(std::string dirname)
 {
-  system("clear");
-  std::cout << "Enter the directory name you want to create:";
-  std::string dirname;
-  std::cin >> dirname;
-
   request->set_command("MKDIR");
   request->arguments = std::string(dirname);
 
@@ -459,51 +438,94 @@ void df_client::start()
     sockfds.push_back(id);
   }
 
+  auto cmd_to_int = [](std::string cmd) {
+    std::transform(cmd.begin(), cmd.end(), cmd.begin(), (int(*)(int))std::tolower);
+    if (cmd == "list") return 1;
+    if (cmd == "get") return 2;
+    if (cmd == "put") return 3;
+    if (cmd == "mkdir") return 4;
+    if (cmd == "exit") return 5;
+    return -1;
+  };
+
+  std::cout << ".........................................\n"
+	    << "Distributed file server v1.0\n"
+	    << "Commands: LIST, GET, PUT, MKDIR, EXIT & HELP\n"
+	    << ".........................................." << std::endl;
+
   while(true) {
-    int choice;
-    std::cout << "Enter your choice:" << "1. LIST  2. GET  3. PUT 4. MKDIR 5.EXIT" << std::endl;
-    std::cin >> choice;
+    std::string cmd("");
+    std::cout << "dfs>>> " << std::flush;
+    std::getline(std::cin, cmd);
+    if (cmd.empty()) continue;
+    auto args = utilities::split(cmd, [](int c){ return c == ' ' ? 1 : 0; });
     
-    switch(choice) {
+    switch(cmd_to_int(args[0])) {
     case 1:
       {
-	list();
+	std::string folder("");
+	if (args.size() > 1) {
+	  folder = args[1];
+	}
+
+	list(folder);
 	break;
       }
     case 2:
       {
-	get();
+	if (args.size() < 2) {
+	  std::cout <<red << "Invalid parameters!" << std::endl << def;
+	  continue;
+	}
+
+	get(args[1]);
 	break;
       }
     case 3:
       {
-	put();
+	if (args.size() < 2) {
+	  std::cout << red << "Invalid parameters!" << std::endl << def;
+	  continue;
+	}
+	std::string folder;
+	if (args.size() > 2) {
+	  folder = args[2];
+	}
+
+	put(args[1], folder);
 	break;
       }
     case 4:
       {
-	mkdir();
+	if (args.size() < 2) {
+	  std::cout << red << "Invalid parameters!" << std::endl << def;
+	  continue;
+	}
+
+	mkdir(args[1]);
 	break;
       }
-    default:
     case 5:
       {
 	for (int id : sockfds)
 	  close(id);
 	exit(EXIT_SUCCESS);
 	break;
-      }      
+      }
+    default:
+      {
+	std::cout << "Unknown command! Please try again!" << std::endl;
+	break;
+      }
     } // switch
   } // while
 }
 
 int main(int argc, char *argv[])
 {
-  std::cout << "DF Client"  << "\n";
-
+  system("clear");
   std::string file(argv[1]);
-  std::cout << file << std::endl;
-
+  
   df_client client(file);
   client.start();
 

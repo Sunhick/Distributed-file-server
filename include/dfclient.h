@@ -29,17 +29,17 @@ namespace dfs {
     df_request_proto* request;
 
     // list all files available under all servers
-    void list();
+    void list(std::string folder);
 
     // get the specified file from available server
-    void get();
+    void get(std::string file);
 
     // put the specified file under the given server based
     // the traffic etc
-    void put();
+    void put(std::string filename, std::string folder);
 
     // make user directory
-    void mkdir();
+    void mkdir(std::string folder);
     
     // wait for server time out
     bool server_timeout(int filedesc);
