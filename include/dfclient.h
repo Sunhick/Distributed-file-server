@@ -38,13 +38,19 @@ namespace dfs {
     // the traffic etc
     void put();
 
+    // make user directory
     void mkdir();
+    
+    // wait for server time out
+    bool server_timeout(int filedesc);
 
     // the policy number which represents where to store piece of
     // file in which server
     int get_policy(std::string file);
     void init_upload_policies();
-    
+    bool get_filename_chunknum(const std::string& msg,
+			       std::string& filename,
+			       int& chunk) const;
   public:
     df_client(std::string& file);
     ~df_client();

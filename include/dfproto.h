@@ -41,7 +41,7 @@ namespace dfs {
 		     const std::string& password);
     // take a request string and convert into
     // df_request_proto object
-    df_request_proto(const std::string& request);
+    df_request_proto(const std::string& request, int occurances = 4);
     ~df_request_proto();
     void set_command(const std::string& command,
 		     const std::string& args = "");

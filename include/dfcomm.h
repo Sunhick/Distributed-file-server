@@ -24,6 +24,9 @@ namespace dfs {
     int port;
 
   public:
+    // get the file descriptor
+    inline int get_file_descriptor() const { return socketfd; }
+
     // open the communication channel
     virtual int open(int backlog) = 0;
     

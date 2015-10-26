@@ -35,7 +35,8 @@ namespace dfs {
 
   class utilities {
   public:
-    static std::vector<std::string> split(const std::string& str, int delimiter(int));
+    static std::vector<std::string> split(const std::string& str, int delimiter(int),
+					  int occurances = -1); // -1: look for all occurances
   };
 }
 

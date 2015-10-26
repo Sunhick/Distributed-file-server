@@ -33,15 +33,16 @@ void df_request_proto::set_command(const std::string& cmd,
   this->arguments = args;
 }
 
-df_request_proto::df_request_proto(const std::string& request) 
+df_request_proto::df_request_proto(const std::string& request, int occurances) 
 {
-  auto arr = utilities::split(request, [](int c) { return (c=='|' ? 1 : 0); });
+  auto arr = utilities::split(request, [](int c) { return (c=='|' ? 1 : 0); }, occurances);
   this->username = std::string(arr[0]);
   this->password = std::string(arr[1]);
   this->command = std::string(arr[2]);
   // content part is optional. Read if present
-  if (arr.size() > 3)
-    this->arguments = std::string(arr[3]);
+  if (arr.size() > 3) {
+      this->arguments += arr[3];
+  }
 }
 
 std::string df_request_proto::to_string()

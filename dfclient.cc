@@ -11,6 +11,10 @@
 #include <stdio.h>
 #include <openssl/md5.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/select.h>
 
 #include <iomanip>
 #include <cstdlib>
@@ -158,6 +162,28 @@ void df_client::init_upload_policies()
   upload_policies.insert(std::pair<int, std::vector<struct upload_policy>>(3, p3));  
 }
 
+bool df_client::server_timeout(int filedesc) 
+{
+  fd_set set;
+  struct timeval timeout;
+
+  FD_ZERO(&set); // clear the set
+  FD_SET(filedesc, &set); // add our file descriptor to the set 
+
+  timeout.tv_sec = 1;
+  int rv = select(filedesc + 1, &set, NULL, NULL, &timeout);
+
+  if(rv == -1) {
+    std::cout << "Error in select()" << std::endl;
+    return true;
+  } else if(rv == 0) {
+    std::cout << "server response time out!" << std::endl;
+    return true;
+  }
+
+  return false;
+}
+
 void df_client::list()
 {
   system("clear");
@@ -173,7 +199,13 @@ void df_client::list()
     char buff[2048*2] = {'\0'};
 
     server.second->write(command.c_str(), command.size());
-    if (server.second->read(buff, 2048*2) == 0) {
+
+    if (server_timeout(server.second->get_file_descriptor())) {
+      std::cout << "server response time out!" << std::endl;
+      continue;  // process other servers
+    }
+
+    if (server.second->read(buff, 2048*4) == 0) {
       this->channels.erase(server.first);
       std::cout << "unable to read the data. Server is down! Updated the server list!" << std::endl;
       std::cout << "No. of alive servers: " << this->channels.size() << std::endl;
@@ -191,7 +223,7 @@ void df_client::list()
     // std::cout << server.first << " raw-response: " + reply.contents << std::endl;
     // split based on delimiter
     auto filenames = utilities::split(reply.contents,
-				  [](int ch){ return (ch == ' '? 1 : 0); });
+				      [](int ch){ return (ch == ' '? 1 : 0); });
 
     for (auto &name : filenames) {
       auto tilldot = name.find_last_of(".");
@@ -235,26 +267,100 @@ void df_client::get()
   request->set_command("GET", file);
   std::string cmd = request->to_string();
 
-  int ii = 0;
-  for (auto& channel : this->channels) {
-    auto& server = channel.second;
-    server->write(this->sockfds[ii], cmd.c_str(), cmd.size());
+  std::map<int, std::string> part_files;
+  bool skip_next = false;
 
-    // while(true) {
-    char buff[2048*2] = {'\0'};
-    if (server->read(this->sockfds[ii], buff, 2048*2) == 0) {
-      std::cout << "unable to read the data" << std::endl;
+  for (auto& channel : this->channels) {
+    // reduce traffic on the network by not getting the redunant files from
+    // from the next server. but instead try the next to next server
+    // if (skip_next)  {
+    //   skip_next = false;
+    //   continue;
+    // }
+
+    auto& server = channel.second;
+    if (server->write(cmd.c_str(), cmd.size()) < 0) {
+      std::cout << "error in writing to the socket. Maybe server is down" << std::endl;
+      this->channels.erase(channel.first);
       continue;
-      // continue;
     }
 
-    std::string reply = std::string(buff);
-    std::cout << reply << std::endl;
-    // df_reply_proto response(reply);
-    //}
-    ii++;
-    // reproduce the file from the server reply
-  } // for
+    if (server_timeout(server->get_file_descriptor())) {
+      std::cout << "Server time out " << std::endl;
+      continue;
+    }
+
+    for (int j = 0 ; j < 2; j++) {
+      char buff[2048*2] = {'\0'};
+      if (server->read(buff, 2048*4) == 0) {
+	std::cout << "unable to read the data. server maybe down!" << std::endl;
+	this->channels.erase(channel.first);
+	break;
+      }
+
+      df_reply_proto reply(buff);
+      if (reply.ecode != OK) {
+	std::cout << "ERROR: " << reply.emsg << std::endl;
+	break; //continue processing with other users
+      }
+
+      std::string name;
+      int chunk;
+      if (!get_filename_chunknum(reply.emsg, name, chunk)) continue;
+
+      if (part_files.find(chunk) == part_files.end()) {
+	part_files.insert(std::pair<int, std::string>(chunk, reply.contents));
+	// skip_next = true;
+      } else {
+	// skip_next = false;
+      }
+    } // for 2 times
+  } // for each server
+
+  modifier red(FG_RED);
+  modifier def(FG_DEFAULT);
+  modifier green(FG_GREEN);
+
+  if (part_files.size() < 4) {
+    std::cout << red << "Missing files! Unable to assemble file" << def << std::endl;
+    return;
+  }
+  
+  std::string fpath = "download.txt";
+  std::fstream dfile(fpath, std::ofstream::out | std::ofstream::in);
+  if (dfile.is_open()) {
+    // warning! file already exists. Maybe the client wants to append
+    // to existing file.
+    dfile.seekg(0, std::ios::end);
+  } else {
+    // create the file
+    dfile.clear();
+    dfile.open(fpath, std::ofstream::out);
+  }
+
+  dfile << "--------------------" << file << "--------------------------" << std::endl;
+  
+  for (auto& file : part_files) {
+    std::cout << file.first << std::endl;
+    dfile << file.second;
+  }
+  std::cout << green << "File downloaded! check download.txt" << def <<std::endl;
+  dfile.close();
+}
+
+bool df_client::get_filename_chunknum(const std::string& msg,
+				      std::string& filename,
+				      int& chunk) const
+{
+  auto tilldot = msg.find_last_of(".");
+  if (tilldot == std::string::npos) {
+    std::cout << "no extension found! " << msg << std::endl;
+    return false;
+  }
+
+  filename = msg.substr(0, tilldot);
+  chunk = std::atoi(msg.substr(tilldot+1).c_str());
+  return true;
 }
 
 // Get the number that represents the policy as to where to
@@ -308,7 +414,8 @@ void df_client::put()
   file.seekg(0);
   file.read(&buffer[0], size);
 
-  int part_size = size / this->channels.size();
+  int part_size = (int)size / this->channels.size();
+  std::cout << "Size:" << part_size << std::endl;
   std::vector<std::string> parts;
   parts.push_back(buffer.substr(0*part_size, 1*part_size));
   parts.push_back(buffer.substr(1*part_size, 2*part_size));
@@ -318,7 +425,7 @@ void df_client::put()
   for (auto &polices : upload_policies[policy]) {
     for (auto &chunk_num : polices.chunk_ids) {
       request->set_command("PUT",
-	      filename + "." + std::to_string(chunk_num) + ":" + parts[chunk_num-1]);
+			   filename + "." + std::to_string(chunk_num) + ":" + parts[chunk_num-1]);
       std::string cmd = request->to_string();
       this->channels[polices.name]->write(cmd.c_str(), cmd.length());
     }
@@ -336,11 +443,11 @@ void df_client::mkdir()
 
   request->set_command("MKDIR");
   request->arguments = std::string(dirname);
+
   for (auto &channel : this->channels) {
     auto cmd = request->to_string();
     channel.second->write(cmd.c_str(), cmd.length());
   }
-
 }
 
 void df_client::start()

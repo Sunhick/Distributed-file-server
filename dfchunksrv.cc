@@ -22,6 +22,7 @@
 #include <chrono>
 #include <iostream>
 #include <fstream>
+#include <regex>
 
 #include "include/dfproto.h"
 #include "include/dfutils.h"
@@ -120,7 +121,7 @@ void df_chunk_srv::dispatch_request(int newfd)
   while (true) {
 
     char buff[2048*2] = {'\0'};
-    if (communication->read(newfd, buff, 2048*2) < 0) {
+    if (communication->read(newfd, buff, 2048*4) < 0) {
       std::cout << "Client closed! Unable to read the socket!" << std::endl;
       break;
     }
@@ -164,7 +165,7 @@ void df_chunk_srv::switch_session(std::string username)
 void df_chunk_srv::handle(std::string reqstr, int newfd) 
 {
   df_request_proto request(reqstr);
-  
+
   // validate the user and only then service the request.
   if (!this->config->validate(request.username, request.password)) {
     std::string error("Invalid username/ password. Please try again");
@@ -176,7 +177,6 @@ void df_chunk_srv::handle(std::string reqstr, int newfd)
 
   //look for the user directory. Create one if not available
   std::string username = request.username;
-  std::cout << username << std::endl;
   switch_session(username);
   
   std::string cmd = request.command;
@@ -243,55 +243,51 @@ void df_chunk_srv::get(int newfd,
     return (stat (name.c_str(), &buffer) == 0);    
   };
 
-  std::string filepath = this->filesys + "/" + username  + "/" + filename;
-  std::cout << "get:" << filepath << std::endl;
+  std::regex re(std::string(filename + "\\.[0-9]+"));
 
-  if(!file_exists(filepath)) {
-    std::cout << "File not found: ["  << filepath << "]" << std::endl;
-    df_reply_proto reply(ERR_FILE_NOT_FOUND, "File doesn't exists!", " ");
-    std::string rstr = reply.to_string();
-    this->communication->write(newfd, rstr.c_str(), rstr.size());
-    return;
-  }
+  std::vector<std::string> allfilenames;
+  this->get_all_files(allfilenames, this->filesys + "/" + username);
 
-  std::ifstream file(filepath);
-  if (!file.is_open()) {
-    std::cout << "Error in reading file!" << filepath << "\n";
-    df_reply_proto reply(ERR_CORRUPTED_FILE, "unable to read!", " ");
-    std::string rstr = reply.to_string();
-    this->communication->write(newfd, rstr.c_str(), rstr.size());
-    return;
-  }
-
-  file.seekg(0, std::ios_base::end);
-  size_t size = file.tellg();
-  std::string buffer(size, ' ');
-  file.seekg(0);
-  // const size_t blockSize = 2048*5;
-  // std::streampos pos = 0;
-  // std::string data;
-  // file.seekg(0);
-  file.read(&buffer[0], size);
+  int matches = 0;
   
-  df_reply_proto reply(OK, filename, buffer);
-  std::string rstr = reply.to_string();
-  this->communication->write(newfd, rstr.c_str(), 2048*2 /*rstr.size()*/);
-  std::cout << rstr << std::endl;
+  for (auto& filename : allfilenames) {
+    if (!std::regex_match(filename, re)) continue;
 
-  /* 
-  // write the actual file content in the df_reply_proto format
-  while ((pos = file.tellg()) >= 0 && (size_t)pos < size - 1){ 
-  data.resize(size - (size_t)pos < blockSize ? size - (size_t)pos : blockSize);
-  file.read(&data[0], data.size());
-  df_reply_proto reply(OK, filename, data);
-  std::string rstr = reply.to_string();
-  this->communication->write(newfd, rstr.c_str(), rstr.size());
-  std::cout << rstr << std::endl;
-  // wait for the client to process
-  // std::this_thread::sleep_for (std::chrono::seconds(1));
-  }*/
+    matches++;
 
-  file.close();
+    std::string filepath = this->filesys + "/" + username + "/." + filename;
+    std::ifstream file(filepath);
+    if (!file.is_open()) {
+      std::cout << "Error in reading file!" << filepath << "\n";
+      df_reply_proto reply(ERR_CORRUPTED_FILE, "unable to read!", " ");
+      std::string rstr = reply.to_string();
+      this->communication->write(newfd, rstr.c_str(), rstr.size());
+      return;
+    }
+
+    file.seekg(0, std::ios_base::end);
+    size_t size = file.tellg();
+    std::string buffer(size, ' ');
+    file.seekg(0);
+    file.read(&buffer[0], size);
+  
+    df_reply_proto reply(OK, filename, buffer);
+    std::string rstr = reply.to_string();
+    this->communication->write(newfd, rstr.c_str(), rstr.size());
+    file.close();     
+  }
+
+  // no matches found, inform the client about no files found.
+  if (!matches) {
+    std::string filepath = this->filesys + "/" + username + "/." + filename;
+    if(!file_exists(filepath)) {
+      std::cout << "File not found: ["  << filepath << "]" << std::endl;
+      df_reply_proto reply(ERR_FILE_NOT_FOUND, "File doesn't exists!", " ");
+      std::string rstr = reply.to_string();
+      this->communication->write(newfd, rstr.c_str(), rstr.size());
+      return;
+    }
+  }
 }
 
 void df_chunk_srv::put(int newfd,
@@ -306,7 +302,7 @@ void df_chunk_srv::put(int newfd,
     std::string filename = content.substr(0, pos); 
     std::string data = content.substr(pos+1, content.size());
 
-    std::string fpath = this->filesys + "/" + username + "/" + filename;
+    std::string fpath = this->filesys + "/" + username + "/." + filename;
     std::fstream file(fpath, std::ofstream::out | std::ofstream::in);
     if (file.is_open()) {
       // warning! file already exists. Maybe the client wants to append
@@ -335,10 +331,6 @@ void df_chunk_srv::get_all_files(std::vector<std::string> &out,
     const std::string file_name = ent->d_name;
     const std::string full_file_name = directory + "/" + file_name;
 
-    // don't ignore hidden files
-    // if (file_name[0] == '.')
-    //  continue;
-
     if (stat(full_file_name.c_str(), &st) == -1)
       continue;
 
@@ -347,7 +339,8 @@ void df_chunk_srv::get_all_files(std::vector<std::string> &out,
     if (is_directory)
       continue;
 
-    out.push_back(file_name);
+    // get rid of dot prefix for the files
+    out.push_back(file_name.substr(1));
   }
   closedir(dir);
 } 
