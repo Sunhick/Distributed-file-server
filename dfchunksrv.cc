@@ -251,8 +251,10 @@ void df_chunk_srv::get(int newfd,
   int matches = 0;
   
   for (auto& filename : allfilenames) {
+    std::cout << filename;
     if (!std::regex_match(filename, re)) continue;
 
+    std::cout << "Match found!" << std::endl;
     matches++;
 
     std::string filepath = this->filesys + "/" + username + "/." + filename;

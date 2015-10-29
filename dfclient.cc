@@ -332,8 +332,9 @@ void df_client::get(std::string file)
 
   dfile << "--------------------" << file << "--------------------------" << std::endl;
   
-  for (auto& file : part_files)
+  for (auto& file : part_files) {
     dfile << file.second;
+  }
 
   std::cout << green << "File downloaded! check download.txt" << def <<std::endl;
   dfile.close();
@@ -401,10 +402,10 @@ void df_client::put(std::string filename, std::string folder)
   int part_size = (int)size / this->channels.size();
 
   std::vector<std::string> parts;
-  parts.push_back(buffer.substr(0*part_size, 1*part_size));
-  parts.push_back(buffer.substr(1*part_size, 2*part_size));
-  parts.push_back(buffer.substr(2*part_size, 3*part_size));
-  parts.push_back(buffer.substr(3*part_size, size - 3*part_size));
+  parts.push_back(buffer.substr(0*part_size, part_size));
+  parts.push_back(buffer.substr(1*part_size, part_size));
+  parts.push_back(buffer.substr(2*part_size, part_size));
+  parts.push_back(buffer.substr(3*part_size)); // till the EOF
 
   for (auto &polices : upload_policies[policy]) {
     for (auto &chunk_num : polices.chunk_ids) {
