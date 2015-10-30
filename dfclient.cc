@@ -446,18 +446,25 @@ void df_client::start()
     if (cmd == "get") return 2;
     if (cmd == "put") return 3;
     if (cmd == "mkdir") return 4;
-    if (cmd == "exit") return 5;
+    if (cmd == "help") return 5;
+    if (cmd == "exit") return 6;
     return -1;
   };
 
-  std::cout << ".........................................\n"
+  modifier def(color::FG_DEFAULT);
+  modifier blue(color::FG_BLUE);
+  modifier cyan(color::FG_CYAN);
+  
+  std::cout << blue << "----------------------------------------------------\n"
 	    << "Distributed file server v1.0\n"
 	    << "Commands: LIST, GET, PUT, MKDIR, EXIT & HELP\n"
-	    << ".........................................." << std::endl;
+	    << "Copyright(c) 2015 Sunil<sunhick@gmail.com>\n"
+	    << "All rights reserved\n"
+	    << "----------------------------------------------------" << def << std::endl;
 
   while(true) {
     std::string cmd("");
-    std::cout << "dfs>>> " << std::flush;
+    std::cout << cyan << "dfs>>> " << std::flush << def;
     std::getline(std::cin, cmd);
     if (cmd.empty()) continue;
     auto args = utilities::split(cmd, [](int c){ return c == ' ' ? 1 : 0; });
@@ -513,6 +520,19 @@ void df_client::start()
       }
     case 5:
       {
+	const char* help_string = "dfs help options\n"
+	  "Options:\n"
+	  "\t PUT \t puts a file into the server(s)\n"
+	  "\t GET \t downloads specified file from the server\n"
+	  "\t LIST \t list the contents in the server(s)\n"
+	  "\t MKDIR \t makes a directory in the server(s)\n"
+	  "\t HELP \t displays this help\n" 
+	  "\t EXIT \t exit the dfs client\n";
+	std::cout << blue << help_string << def << std::endl;
+	break;
+      }
+    case 6:
+      {
 	for (int id : sockfds)
 	  close(id);
 	exit(EXIT_SUCCESS);
@@ -520,7 +540,7 @@ void df_client::start()
       }
     default:
       {
-	std::cout << "Unknown command! Please try again!" << std::endl;
+	std::cout << red << "Unknown command! Please try again!" << def << std::endl;
 	break;
       }
     } // switch

@@ -20,6 +20,7 @@ namespace dfs {
     FG_RED      = 31,
     FG_GREEN    = 32,
     FG_BLUE     = 34,
+    FG_CYAN     = 36,
     FG_DEFAULT  = 39,
     BG_RED      = 41,
     BG_GREEN    = 42,
