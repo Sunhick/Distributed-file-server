@@ -32,7 +32,7 @@ namespace dfs {
     void list(std::string folder);
 
     // get the specified file from available server
-    void get(std::string file);
+    void get(std::string file, std::string folder);
 
     // put the specified file under the given server based
     // the traffic etc

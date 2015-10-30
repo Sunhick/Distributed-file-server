@@ -35,7 +35,7 @@ void df_request_proto::set_command(const std::string& cmd,
 
 df_request_proto::df_request_proto(const std::string& request, int occurances) 
 {
-  auto arr = utilities::split(request, [](int c) { return (c=='|' ? 1 : 0); }, occurances);
+  auto arr = utilities::split(request, [](int c) { return (c=='^' ? 1 : 0); }, occurances);
   this->username = std::string(arr[0]);
   this->password = std::string(arr[1]);
   this->command = std::string(arr[2]);
@@ -48,16 +48,16 @@ df_request_proto::df_request_proto(const std::string& request, int occurances)
 std::string df_request_proto::to_string()
 {
   std::stringstream data;
-  if (!arguments.empty())
-    data << username << "|" << password << "|" << command << "|" << arguments;
-  else
-    data << username << "|" << password << "|" << command;
+  //  if (!arguments.empty())
+    data << username << "^" << password << "^" << command << "^" << arguments;
+    // else
+    // data << username << "^" << password << "^" << command;
   return data.str();
 }
 
 df_reply_proto::df_reply_proto(std::string reply) 
 {
-  auto parsed = utilities::split(reply, [](int c) { return (c=='|' ? 1 : 0); });
+  auto parsed = utilities::split(reply, [](int c) { return (c=='^' ? 1 : 0); });
 
   this->ecode = atoi(parsed[0].c_str());
   this->emsg = parsed[1];
@@ -81,6 +81,6 @@ df_reply_proto::~df_reply_proto()
 std::string df_reply_proto::to_string()
 {
   std::stringstream data;
-  data << ecode << "|" << emsg << "|" << contents;
+  data << ecode << "^" << emsg << "^" << contents;
   return data.str();
 }

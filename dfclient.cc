@@ -200,16 +200,16 @@ void df_client::list(std::string folder)
   std::map<std::string, std::vector<int>> files;
 
   for (auto& server : this->channels) {
-    char buff[2048*2] = {'\0'};
+    char buff[WRITE_SIZE] = {'\0'};
 
-    server.second->write(command.c_str(), command.size());
+    server.second->write(command.c_str(), WRITE_SIZE);
 
     if (server_timeout(server.second->get_file_descriptor())) {
       std::cout << "server response time out!" << std::endl;
       continue;  // process other servers
     }
 
-    if (server.second->read(buff, 2048*4) == 0) {
+    if (server.second->read(buff, READ_SIZE) == 0) {
       this->channels.erase(server.first);
       std::cout << "unable to read the data. Server is down! Updated the server list!" << std::endl;
       std::cout << "No. of alive servers: " << this->channels.size() << std::endl;
@@ -258,9 +258,9 @@ void df_client::list(std::string folder)
   }
 }
 
-void df_client::get(std::string file) 
+void df_client::get(std::string file, std::string folder) 
 {
-  request->set_command("GET", file);
+  request->set_command("GET", folder + "^" + file);
   std::string cmd = request->to_string();
 
   std::map<int, std::string> part_files;
@@ -275,7 +275,7 @@ void df_client::get(std::string file)
     // }
 
     auto& server = channel.second;
-    if (server->write(cmd.c_str(), cmd.size()) < 0) {
+    if (server->write(cmd.c_str(), WRITE_SIZE) < 0) {
       std::cout << "error in writing to the socket. Maybe server is down" << std::endl;
       this->channels.erase(channel.first);
       continue;
@@ -287,8 +287,8 @@ void df_client::get(std::string file)
     }
 
     for (int j = 0 ; j < 2; j++) {
-      char buff[2048*2] = {'\0'};
-      if (server->read(buff, 2048*4) == 0) {
+      char buff[READ_SIZE] = {'\0'};
+      if (server->read(buff, READ_SIZE) == 0) {
 	std::cout << "unable to read the data. server maybe down!" << std::endl;
 	this->channels.erase(channel.first);
 	break;
@@ -383,15 +383,15 @@ int df_client::get_policy(std::string file)
 
 void df_client::put(std::string filename, std::string folder)
 {
-  // based on the policy number, place the chunk file
-  // in different chunk servers
-  int policy = get_policy(filename);
-
   std::ifstream file(filename);
   if (!file.is_open()) {
     std::cout << red << "Error in reading file:" << filename << def <<"\n";
     return;
   }
+
+  // based on the policy number, place the chunk file
+  // in different chunk servers
+  int policy = get_policy(filename);
 
   file.seekg(0, std::ios_base::end);
   size_t size = file.tellg();
@@ -410,9 +410,10 @@ void df_client::put(std::string filename, std::string folder)
   for (auto &polices : upload_policies[policy]) {
     for (auto &chunk_num : polices.chunk_ids) {
       request->set_command("PUT",
-			   filename + "." + std::to_string(chunk_num) + ":" + parts[chunk_num-1]);
+			   filename + "." + std::to_string(chunk_num) + "^"
+			   + folder + "^" + parts[chunk_num-1]);
       std::string cmd = request->to_string();
-      this->channels[polices.name]->write(cmd.c_str(), cmd.length());
+      this->channels[polices.name]->write(cmd.c_str(), WRITE_SIZE);
     }
   }
 
@@ -426,7 +427,7 @@ void df_client::mkdir(std::string dirname)
 
   for (auto &channel : this->channels) {
     auto cmd = request->to_string();
-    channel.second->write(cmd.c_str(), cmd.length());
+    channel.second->write(cmd.c_str(), WRITE_SIZE);
   }
 }
 
@@ -460,11 +461,11 @@ void df_client::start()
     std::getline(std::cin, cmd);
     if (cmd.empty()) continue;
     auto args = utilities::split(cmd, [](int c){ return c == ' ' ? 1 : 0; });
-    
+    std::string folder("__default__"); // default folder
+
     switch(cmd_to_int(args[0])) {
     case 1:
       {
-	std::string folder("");
 	if (args.size() > 1) {
 	  folder = args[1];
 	}
@@ -479,7 +480,11 @@ void df_client::start()
 	  continue;
 	}
 
-	get(args[1]);
+	if (args.size() > 2) {
+	  folder = args[2];
+	}
+
+	get(args[1], folder);
 	break;
       }
     case 3:
@@ -488,7 +493,7 @@ void df_client::start()
 	  std::cout << red << "Invalid parameters!" << std::endl << def;
 	  continue;
 	}
-	std::string folder;
+
 	if (args.size() > 2) {
 	  folder = args[2];
 	}

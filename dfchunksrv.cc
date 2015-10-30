@@ -120,8 +120,8 @@ void df_chunk_srv::dispatch_request(int newfd)
   
   while (true) {
 
-    char buff[2048*2] = {'\0'};
-    if (communication->read(newfd, buff, 2048*4) < 0) {
+    char buff[2048*4] = {'\0'};
+    if (communication->read(newfd, buff, READ_SIZE) < 0) {
       std::cout << "Client closed! Unable to read the socket!" << std::endl;
       break;
     }
@@ -129,10 +129,12 @@ void df_chunk_srv::dispatch_request(int newfd)
     // process the buffer if it contains request
     if (buff == NULL || strlen(buff) == 0) break;
     std::string request = std::string(buff);
-    // std::cout << "raw-request:" << request << std::endl;
-    std::cout << "Raw-request: "
+    modifier red(color::FG_GREEN);
+    modifier def(color::FG_DEFAULT);
+    std::cout << "raw-request:" << red << request << def << std::endl;
+    /*std::cout << "Raw-request: "
 	      << std::string(request.begin(), request.begin() + 30)
-	      << "..."<< std::endl;
+	      << "..."<< std::endl;*/
     handle(request, newfd);
   }
 
@@ -171,7 +173,7 @@ void df_chunk_srv::handle(std::string reqstr, int newfd)
     std::string error("Invalid username/ password. Please try again");
     df_reply_proto reply(ERR_INVALID_USER, error, " ");
     std::string rstr = reply.to_string();
-    this->communication->write(newfd, rstr.c_str(), rstr.size());
+    this->communication->write(newfd, rstr.c_str(), WRITE_SIZE);
     return;
   }
 
@@ -218,6 +220,11 @@ void df_chunk_srv::list(int newfd,
 {
   std::vector<std::string> files;
   std::string dir = this->filesys + "/" + username;
+
+  if (!arguments.empty() && arguments != "__default__") {
+    dir += "/" + arguments;
+  }
+
   std::cout << "list: " << dir << std::endl;
   this->get_all_files(files, dir);
   std::cout << "Get all files size: " << files.size() << std::endl;
@@ -231,11 +238,11 @@ void df_chunk_srv::list(int newfd,
 
   df_reply_proto reply(OK, "LIST", data);
   std::string rstr = reply.to_string();
-  this->communication->write(newfd, rstr.c_str(), rstr.size());
+  this->communication->write(newfd, rstr.c_str(), WRITE_SIZE);
 }
 
 void df_chunk_srv::get(int newfd,
-		       std::string& filename,
+		       std::string& args,
 		       const std::string& username)
 {
   auto file_exists = [] (const std::string& name) {
@@ -243,27 +250,35 @@ void df_chunk_srv::get(int newfd,
     return (stat (name.c_str(), &buffer) == 0);    
   };
 
+  auto parsed = utilities::split(args, [](int c) { return (c == '^' ? 1 : 0);}, 3);
+  auto filename = parsed[1];
+  auto folder  = parsed[0];
+  
   std::regex re(std::string(filename + "\\.[0-9]+"));
 
   std::vector<std::string> allfilenames;
-  this->get_all_files(allfilenames, this->filesys + "/" + username);
+  std::string fpath = this->filesys + "/" + username;
+  if (!folder.empty() && folder != "__default__")
+    fpath += "/" + folder;
+
+  this->get_all_files(allfilenames, fpath);
 
   int matches = 0;
   
   for (auto& filename : allfilenames) {
-    std::cout << filename;
+    std::cout << filename << "---->";
     if (!std::regex_match(filename, re)) continue;
 
     std::cout << "Match found!" << std::endl;
     matches++;
 
-    std::string filepath = this->filesys + "/" + username + "/." + filename;
+    std::string filepath = fpath + "/." + filename;
     std::ifstream file(filepath);
     if (!file.is_open()) {
       std::cout << "Error in reading file!" << filepath << "\n";
       df_reply_proto reply(ERR_CORRUPTED_FILE, "unable to read!", " ");
       std::string rstr = reply.to_string();
-      this->communication->write(newfd, rstr.c_str(), rstr.size());
+      this->communication->write(newfd, rstr.c_str(), WRITE_SIZE);
       return;
     }
 
@@ -275,7 +290,7 @@ void df_chunk_srv::get(int newfd,
   
     df_reply_proto reply(OK, filename, buffer);
     std::string rstr = reply.to_string();
-    this->communication->write(newfd, rstr.c_str(), rstr.size());
+    this->communication->write(newfd, rstr.c_str(), WRITE_SIZE);
     file.close();     
   }
 
@@ -286,7 +301,7 @@ void df_chunk_srv::get(int newfd,
       std::cout << "File not found: ["  << filepath << "]" << std::endl;
       df_reply_proto reply(ERR_FILE_NOT_FOUND, "File doesn't exists!", " ");
       std::string rstr = reply.to_string();
-      this->communication->write(newfd, rstr.c_str(), rstr.size());
+      this->communication->write(newfd, rstr.c_str(), WRITE_SIZE);
       return;
     }
   }
@@ -296,29 +311,41 @@ void df_chunk_srv::put(int newfd,
 		       std::string& content,
 		       const std::string& username)
 {
-  // split the content to extract the filename
-  std::string::size_type pos;
-  pos = content.find(':', 0);
+  // split the content to extract the filename, folder and contents
+  // format filename : folder : contents
+  auto parsed = utilities::split(content, [](int c) { return (c == '^' ? 1 : 0);}, 3);
 
-  if (pos != std::string::npos) {
-    std::string filename = content.substr(0, pos); 
-    std::string data = content.substr(pos+1, content.size());
+  auto filename = parsed[0];
+  std::string folder = parsed[1];
+  std::string file_contents = parsed[2];
 
-    std::string fpath = this->filesys + "/" + username + "/." + filename;
-    std::fstream file(fpath, std::ofstream::out | std::ofstream::in);
-    if (file.is_open()) {
-      // warning! file already exists. Maybe the client wants to append
-      // to existing file.
-      file.seekg(0, std::ios::end);
-    } else {
-      // create the file
-      file.clear();
-      file.open(fpath, std::ofstream::out);
+
+  std::string fpath = this->filesys + "/" + username;
+
+  if (!folder.empty() && folder != "__default__") {
+    fpath += "/" + folder;
+    struct stat st = {0};
+    if (stat(fpath.c_str(), &st) == -1) {
+      ::mkdir(fpath.c_str(), PERMISSIONS);
     }
-
-    file << data;
-    file.close();    
   }
+
+  fpath += + "/." + filename;
+  std::cout << "FOLDER:" << fpath << std::endl;
+
+  std::fstream file(fpath, std::ofstream::out | std::ofstream::in);
+  if (file.is_open()) {
+    // warning! file already exists. Maybe the client wants to append
+    // to existing file.
+    file.seekg(0, std::ios::end);
+  } else {
+    // create the file
+    file.clear();
+    file.open(fpath, std::ofstream::out);
+  }
+
+  file << file_contents;
+  file.close();    
 }
 
 void df_chunk_srv::get_all_files(std::vector<std::string> &out,

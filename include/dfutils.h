@@ -11,6 +11,9 @@
 #include <vector>
 #include <algorithm>
 
+constexpr int WRITE_SIZE = 2048 * 4;
+constexpr int READ_SIZE = WRITE_SIZE;
+
 namespace dfs {
 
   enum color {
