@@ -11,6 +11,10 @@
 #include <vector>
 #include <algorithm>
 
+#include <iostream>
+#include <openssl/evp.h>
+#include <openssl/aes.h>
+
 constexpr int WRITE_SIZE = 2048 * 4;
 constexpr int READ_SIZE = WRITE_SIZE;
 
@@ -38,9 +42,20 @@ namespace dfs {
   };
 
   class utilities {
+  private:
+    static std::string aes_encrypt(EVP_CIPHER_CTX *ctx, unsigned char *plaintext, int *len);
+    static std::string aes_decrypt(EVP_CIPHER_CTX *ctx, unsigned char *ciphertext, int *len);
+
   public:
     static std::vector<std::string> split(const std::string& str, int delimiter(int),
 					  int occurances = -1); // -1: look for all occurances
+
+    static int aes_init(unsigned char *key_data, int key_data_len, unsigned char *salt, EVP_CIPHER_CTX *e_ctx, 
+		 EVP_CIPHER_CTX *d_ctx);
+
+    // vanilla flavors for ease of use
+    static std::string aes_encrypt(const std::string& plaintext, const std::string& password);
+    static std::string aes_decrypt(const std::string& ciphertext, const std::string& password);
   };
 }
 
